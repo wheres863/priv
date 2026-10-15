@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>T9 · browser</title>
+  <meta name="title" content="T9 Browser" />
+  <meta name="description" content="a modern web proxy browser" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://t9.rhw.one/" />
+  <meta property="og:title" content="T9 Browser" />
+  <meta property="og:description" content="a modern web proxy browser" />
+  <meta property="og:image" content="https://t9.rhw.one/card.png" />
+  <meta property="twitter:card" content="summary_large_image" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Preserved original proxy scripts -->
+  <script src="./ghost.js"></script>
+  <script src="/uv/uv.bundle.js"></script>
+  <script src="/uv/uv.config.js"></script>
+  <script src="./index.config.js"></script>
+  <script src="./surf/baremux/index.js"></script>
+  <script src="./surf/scram/scramjet.all.js"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-WDHVNCL11H"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date()); gtag('config', 'G-WDHVNCL11H');
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      location.replace(`https://${location.host}${location.pathname}${location.search}${location.hash}`);
+    }
+  </script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            'base': '#05050a',
+            'surface': '#0c0c14',
+            'elevated': '#12121c',
+            'glass': 'rgba(14, 14, 24, 0.85)',
+            'border-dim': 'rgba(255, 255, 255, 0.06)',
+            'border': 'rgba(255, 255, 255, 0.1)',
+            'border-light': 'rgba(255, 255, 255, 0.16)',
+            'text-primary': '#e8e8f0',
+            'text-secondary': '#8a8a9a',
+            'text-muted': '#4a4a5a',
+            'accent': '#3b9eff',
+            'accent-soft': 'rgba(59, 158, 255, 0.12)',
+            'accent-glow': 'rgba(59, 158, 255, 0.3)',
+            'cyan': '#22d3ee',
+            'cyan-soft': 'rgba(34, 211, 238, 0.12)',
+            'cyan-glow': 'rgba(34, 211, 238, 0.35)',
+          },
+          backdropBlur: {
+            'chrome': '16px',
+            'panel': '12px',
+          },
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Chromebook-optimized base styles - reduced animations */
+    body {
+      background-color: #05050a;
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow: hidden;
+      height: 100vh;
+      margin: 0;
+      /* Disable expensive animations on low-power devices */
+      will-change: auto;
+    }
+    
+    /* Static starfield - no animation to save GPU */
+    .starfield {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image: 
+        radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.35), transparent),
+        radial-gradient(1px 1px at 25% 35%, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 40% 20%, rgba(255,255,255,0.4), transparent),
+        radial-gradient(1px 1px at 55% 45%, rgba(59,158,255,0.35), transparent),
+        radial-gradient(1px 1px at 70% 25%, rgba(34,211,238,0.3), transparent),
+        radial-gradient(1px 1px at 85% 40%, rgba(255,255,255,0.35), transparent),
+        radial-gradient(1px 1px at 15% 60%, rgba(59,158,255,0.3), transparent),
+        radial-gradient(1px 1px at 30% 70%, rgba(255,255,255,0.35), transparent),
+        radial-gradient(1px 1px at 50% 55%, rgba(34,211,238,0.3), transparent),
+        radial-gradient(1px 1px at 65% 65%, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 80% 55%, rgba(59,158,255,0.35), transparent),
+        radial-gradient(1px 1px at 90% 70%, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 20% 80%, rgba(34,211,238,0.3), transparent),
+        radial-gradient(1px 1px at 45% 75%, rgba(255,255,255,0.35), transparent),
+        radial-gradient(1px 1px at 60% 80%, rgba(59,158,255,0.3), transparent),
+        radial-gradient(1px 1px at 75% 85%, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 95% 20%, rgba(34,211,238,0.35), transparent),
+        radial-gradient(1px 1px at 5% 85%, rgba(59,158,255,0.3), transparent),
+        radial-gradient(1px 1px at 35% 90%, rgba(255,255,255,0.3), transparent),
+        radial-gradient(1px 1px at 55% 15%, rgba(34,211,238,0.35), transparent);
+      /* NO animation - static background for Chromebook performance */
+      mask-image: radial-gradient(ellipse 70% 50% at 50% 40%, black 20%, transparent 70%);
+      -webkit-mask-image: radial-gradient(ellipse 70% 50% at 50% 40%, black 20%, transparent 70%);
+    }
+
+    /* Lightweight scrollbar */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+    
+    /* Tab active style - simplified box-shadow */
+    .tab-active {
+      background: rgba(255, 255, 255, 0.07);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+      color: #e8e8f0;
+      border-color: rgba(255, 255, 255, 0.16) !important;
+    }
+    
+    /* Tab close button visibility */
+    .tab:hover .tab-x,
+    .tab.active .tab-x {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+    
+    /* Input focus glow - simplified */
+    .input-glow:focus-within {
+      border-color: rgba(59, 158, 255, 0.5);
+      box-shadow: 0 0 0 2px rgba(59, 158, 255, 0.1);
+    }
+    
+    #proxy-loading, #proxy-watermark, #terminal-shell { display: none !important; }
+    #video-background {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      object-fit: cover; z-index: -2; pointer-events: none; display: none;
+    }
+    
+    /* Fast transitions - 150ms instead of 200ms+ */
+    .transition-fast {
+      transition: all 0.15s ease;
+    }
+
+    /* Simplified glass panels with less blur for performance */
+    .glass-panel {
+      background: rgba(14, 14, 24, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    /* Disable expensive mask-image on low-end devices if needed */
+    @media (max-width: 768px) {
+      .starfield {
+        mask-image: none;
+        -webkit-mask-image: none;
+      }
+    }
+
+    /* Reduce paint areas */
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="relative h-screen w-screen text-text-primary antialiased">
+
+  <div class="starfield"></div>
+  
+  <video id="video-background" autoplay loop muted playsinline></video>
+  
+  <select id="background-select" class="hidden"></select>
+  <input id="background-upload" type="file" accept="image/*,video/*" class="hidden" />
+
+  <div id="proxy-shell" style="display:none"><div id="proxy-loading"></div><div id="proxy-watermark"><pre class="watermark-logo" id="watermark-logo"></pre><div class="watermark-hint"></div></div></div>
+  <div id="terminal-shell" style="display:none"><div id="term"><div id="term-output"><div id="term-status"><span class="term-status-label">url:</span><span id="term-location"></span></div><form id="term-input-row"><span id="term-prefix">root@t9:~$&nbsp;</span><input id="term-input" autocomplete="off" spellcheck="false" /><span id="term-cursor" aria-hidden="true"></span><span id="term-cursor-measure" aria-hidden="true"></span></form></div></div></div>
+
+  <div id="browser" class="relative z-10 flex flex-col h-full">
+
+    <!-- Compact top chrome bar -->
+    <header id="chrome" class="flex-shrink-0 glass-panel border-b border-border z-30 mx-2 mt-2 rounded-2xl shadow-lg shadow-black/30">
+      <!-- Tab strip -->
+      <div id="tab-strip" class="flex items-center h-9 px-2 gap-1 overflow-x-auto scrollbar-hide">
+        <button id="btn-newtab" onclick="B.addTab()" title="New tab (Ctrl+T)" class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-text-muted hover:bg-white/10 hover:text-white border border-transparent hover:border-border transition-fast">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14m-7-7h14"/></svg>
+        </button>
+      </div>
+
+      <!-- Navigation bar - compact -->
+      <div id="nav-bar" class="flex items-center h-10 px-2 gap-1.5">
+        <button id="btn-back" onclick="B.back()" class="p-1.5 rounded-lg text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-30 transition-fast border border-transparent hover:border-border" title="Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m7-7l-7 7 7 7"/></svg>
+        </button>
+        <button id="btn-fwd" onclick="B.fwd()" class="p-1.5 rounded-lg text-text-muted hover:bg-white/10 hover:text-white disabled:opacity-30 transition-fast border border-transparent hover:border-border" title="Forward">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14m-7-7l7 7-7 7"/></svg>
+        </button>
+        <button id="btn-reload" onclick="B.reload()" class="p-1.5 rounded-lg text-text-muted hover:bg-white/10 hover:text-white transition-fast border border-transparent hover:border-border" title="Reload">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3.1-6.9"/><path d="M21 3v6h-6"/></svg>
+        </button>
+        <button id="btn-home" onclick="B.home()" class="p-1.5 rounded-lg text-text-muted hover:bg-white/10 hover:text-white transition-fast border border-transparent hover:border-border" title="Home">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1V10"/></svg>
+        </button>
+
+        <span class="font-mono font-bold text-xs tracking-widest text-accent ml-0.5 select-none">T9</span>
+
+        <div id="wisp-status" class="hidden items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono border border-border bg-white/5 text-text-muted ml-0.5">
+          <span class="ws-dot w-1 h-1 rounded-full bg-cyan"></span>
+          <span id="wisp-label">WISP</span>
+        </div>
+
+        <div class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border border-border bg-white/5 text-text-secondary cursor-pointer hover:bg-white/10 transition-fast" id="badge-proxy" onclick="B.toggleProxyDropdown(event)">
+          <span class="w-1 h-1 rounded-full bg-cyan" id="proxy-dot"></span>
+          <span id="proxy-name">SJ</span>
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+
+        <div class="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border border-border bg-white/5 text-text-secondary cursor-pointer hover:bg-white/10 transition-fast" id="badge-se" onclick="B.toggleSeDropdownChrome(event)">
+          <span class="w-1 h-1 rounded-full bg-accent" id="se-dot"></span>
+          <span id="se-name-badge">DDG</span>
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+
+        <!-- URL Bar -->
+        <div id="url-bar" class="flex-1 flex items-center bg-white/[0.03] border border-border rounded-full h-8 px-3 gap-1.5 transition-fast input-glow cursor-text" onclick="B.focusUrl()">
+          <span id="url-scheme" class="hidden text-[8px] font-mono px-1.5 py-0.5 rounded-full bg-cyan/10 text-cyan border border-cyan/20"></span>
+          <input id="url-input" type="text" placeholder="Search or enter a URL..." class="flex-1 bg-transparent border-none outline-none text-[12px] font-mono text-text-primary placeholder-text-muted" autocomplete="off" spellcheck="false" onfocus="B.onFocus()" onblur="B.onBlur()" oninput="B.onInput(this.value)" onkeydown="B.onKey(event)" />
+          <button id="url-go" onclick="B.navigate(document.getElementById('url-input').value)" class="w-6 h-6 flex items-center justify-center rounded-full bg-white/5 border border-border text-text-muted hover:bg-accent hover:text-white hover:border-accent transition-fast">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14m-4-4l4 4-4 4"/></svg>
+          </button>
+        </div>
+
+        <button id="btn-star" class="p-1.5 rounded-lg text-text-muted hover:text-cyan transition-fast border border-transparent hover:border-border" onclick="B.star()" title="Bookmark">
+          <svg id="star-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path id="star-use" d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z"/></svg>
+        </button>
+        <button class="p-1.5 rounded-lg text-text-muted hover:text-white transition-fast border border-transparent hover:border-border" onclick="B.menu(event)" title="Menu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Content area -->
+    <main id="content" class="flex-1 relative bg-transparent overflow-hidden mx-2 mb-2 rounded-2xl border border-border">
+      <div id="prog" class="absolute top-0 left-0 right-0 h-[2px] z-50 pointer-events-none">
+        <div id="prog-bar" class="h-full w-0 opacity-0 bg-gradient-to-r from-accent to-cyan transition-opacity"></div>
+      </div>
+
+      <iframe id="proxy-frame" class="absolute inset-0 w-full h-full border-none hidden rounded-2xl" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock allow-modals"></iframe>
+
+      <div id="error-page" class="absolute inset-0 hidden flex-col items-center justify-center gap-4 p-8 z-40">
+        <div class="w-14 h-14 rounded-2xl bg-white/5 border border-border flex items-center justify-center text-text-muted">
+          <svg id="err-icon-svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path id="err-icon-use" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        </div>
+        <h2 id="err-title" class="text-lg font-semibold text-text-primary">Connection failed</h2>
+        <p id="err-msg" class="text-xs text-text-secondary text-center max-w-md font-mono">Could not connect to the proxy server.</p>
+        <div class="flex gap-2 mt-1">
+          <button class="px-4 py-2 rounded-xl bg-white/5 border border-border text-text-secondary hover:bg-white/10 transition-fast text-sm" onclick="B.retryLoad()">Try again</button>
+          <button class="px-4 py-2 rounded-xl bg-accent-soft border border-accent/30 text-accent hover:bg-accent/20 transition-fast text-sm" onclick="B.switchAndRetry()">Switch proxy</button>
+        </div>
+        <span id="err-code" class="text-[9px] font-mono text-text-muted bg-white/5 border border-border px-2 py-1 rounded-full">ERR_CONNECTION_FAILED</span>
+      </div>
+
+      <div id="newtab" class="absolute inset-0 flex flex-col items-center justify-center p-6">
+        <div class="text-center mb-8">
+          <h1 class="text-6xl font-bold tracking-tight bg-gradient-to-r from-accent via-cyan to-accent bg-clip-text text-transparent">T9</h1>
+          <p class="text-[10px] font-mono text-text-muted tracking-[0.3em] uppercase mt-1">browser</p>
+        </div>
+
+        <div class="w-full max-w-lg relative">
+          <div id="nt-sw" class="flex items-center bg-white/[0.02] border border-border rounded-2xl h-12 px-3 gap-2 transition-fast input-glow shadow-lg shadow-black/20">
+            <button id="se-toggle" onclick="B.toggleSeDropdownNT(event)" class="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 border border-border text-text-muted hover:text-white transition-fast">
+              <svg id="se-icon-nt" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+            </button>
+            <input id="nt-s" type="text" placeholder="Search or type a URL..." class="flex-1 bg-transparent border-none outline-none text-sm text-text-primary placeholder-text-muted font-medium" onkeydown="if(event.key==='Enter')B.navigate(this.value)" />
+            <button id="nt-go" onclick="B.navigate(document.getElementById('nt-s').value)" class="h-9 px-5 rounded-xl bg-accent text-white font-semibold text-xs tracking-wider flex items-center gap-1.5 hover:opacity-90 transition-fast border border-accent/40">
+              Go
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14m-4-4l4 4-4 4"/></svg>
+            </button>
+          </div>
+          <div id="se-dropdown" class="absolute top-full left-0 mt-2 w-60 glass-panel rounded-2xl p-1.5 shadow-xl hidden z-50 border border-border"></div>
+        </div>
+
+        <div id="rc-sec" class="w-full max-w-lg mt-6 hidden">
+          <p class="text-[10px] font-mono text-text-muted tracking-[0.2em] uppercase mb-2 px-1">Recently closed</p>
+          <div id="nt-rc" class="space-y-1"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="omni" class="fixed z-[9999] hidden glass-panel rounded-2xl p-1.5 min-w-[360px] shadow-xl top-20 left-1/2 -translate-x-1/2 border border-border"></div>
+  <div id="proxy-dropdown" class="fixed z-[9999] hidden glass-panel rounded-2xl p-1.5 min-w-[160px] shadow-xl border border-border"></div>
+  <div id="se-dropdown-chrome" class="fixed z-[9999] hidden glass-panel rounded-2xl p-1.5 min-w-[180px] shadow-xl border border-border"></div>
+
+  <div id="wallpaper-overlay" class="fixed inset-0 z-[10000] bg-black/70 hidden items-end justify-center p-0" onclick="if(event.target===this)closeWallpaper()">
+    <div class="w-full max-w-md glass-panel rounded-t-3xl p-6 pb-8 shadow-xl border border-border">
+      <div class="w-10 h-1.5 bg-white/20 rounded-full mx-auto mb-5"></div>
+      <h3 class="text-lg font-semibold text-text-primary mb-4">Wallpaper</h3>
+      <div class="grid grid-cols-6 gap-2 mb-5" id="wp-presets"></div>
+      <div class="flex gap-2">
+        <button class="flex-1 py-2.5 rounded-xl bg-white/5 border border-border text-text-secondary hover:bg-white/10 transition-fast text-sm" onclick="document.getElementById('background-upload').click()">Upload</button>
+        <button class="flex-1 py-2.5 rounded-xl bg-white/5 border border-border text-text-secondary hover:bg-white/10 transition-fast text-sm" onclick="WP.clearBg()">Clear</button>
+      </div>
+    </div>
+  </div>
+  <div id="wp-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[20000] glass-panel px-4 py-2.5 rounded-2xl text-sm hidden items-center gap-2 shadow-lg border border-border">
+    <span class="w-2 h-2 rounded-full bg-cyan"></span><span id="toast-msg" class="text-text-secondary">Saving...</span>
+  </div>
+
+  <script src="./app.js" defer></script>
+
+  <script>
+    const SEARCH_ENGINES = {
+      duckduckgo: { name:'DuckDuckGo', short:'DDG', url:'https://duckduckgo.com/?q=' },
+      google: { name:'Google', short:'GGL', url:'https://www.google.com/search?q=' },
+      bing: { name:'Bing', short:'BNG', url:'https://www.bing.com/search?q=' },
+      brave: { name:'Brave', short:'BRV', url:'https://search.brave.com/search?q=' },
+      startpage: { name:'Startpage', short:'SPG', url:'https://www.startpage.com/sp/search?query=' },
+      ecosia: { name:'Ecosia', short:'ECO', url:'https://www.ecosia.org/search?q=' },
+    };
+
+    const B = (() => {
+      let tabs = [mkTab()];
+      let cur = 0;
+      let recent = [];
+      let currentProxy = 'scramjet';
+      let currentSearch = localStorage.getItem('t9_search') || 'duckduckgo';
+
+      function mkTab(url, title) { 
+        return { url: url||'', title: title||'New tab', fav: null, hist: url?[url]:[], hidx: url?0:-1 }; 
+      }
+      function ct() { return tabs[cur]; }
+
+      function resolveUrl(raw) {
+        raw = (raw||'').trim();
+        if (!raw) return null;
+        if (/^https?:\/\//i.test(raw)) return raw;
+        if (raw.includes('.') && !raw.includes(' ')) return 'https://' + raw;
+        return SEARCH_ENGINES[currentSearch].url + encodeURIComponent(raw);
+      }
+
+      function renderTabs() {
+        const strip = document.getElementById('tab-strip');
+        strip.querySelectorAll('.tab').forEach(el => el.remove());
+        tabs.forEach((t,i) => {
+          const d = document.createElement('div');
+          d.className = `tab flex items-center gap-1.5 h-7 min-w-[90px] max-w-[160px] px-2.5 rounded-lg text-[11px] font-medium cursor-pointer transition-fast border ${
+            i===cur ? 'tab-active border-white/16' : 'text-text-muted border-transparent hover:bg-white/5 hover:border-border'
+          }`;
+          d.innerHTML = `<span class="w-3.5 h-3.5 flex items-center justify-center text-[10px]">${t.fav ? `<img src="${t.fav}" class="w-3.5 h-3.5 rounded-sm">` : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'}</span><span class="truncate flex-1">${t.title}</span><button class="tab-x ml-0.5 w-4 h-4 rounded-full flex items-center justify-center text-text-muted hover:text-red-400 hover:bg-red-400/15 transition-fast opacity-0 pointer-events-none text-[9px] font-bold">✕</button>`;
+          d.onclick = (e) => { 
+            if (e.target.closest('.tab-x')) return;
+            if(cur!==i){ cur=i; sync(); } 
+          };
+          d.querySelector('.tab-x').onclick = (e)=>{ 
+            e.stopPropagation(); 
+            closeTab(i); 
+          };
+          strip.insertBefore(d, document.getElementById('btn-newtab'));
+        });
+        document.getElementById('btn-back').disabled = ct().hidx <= 0;
+        document.getElementById('btn-fwd').disabled = ct().hidx >= ct().hist.length-1;
+      }
+
+      function sync() {
+        const t = ct();
+        document.getElementById('url-input').value = t.url;
+        renderTabs();
+        hideError();
+        if (t.url) { showFrame(); doLoad(t.url, false); }
+        else { showNew(); }
+      }
+
+      function addTab(url, title) {
+        tabs.push(mkTab(url, title));
+        cur = tabs.length-1;
+        sync();
+        if(!url) setTimeout(()=>document.getElementById('nt-s').focus(),50);
+      }
+
+      function closeTab(i) {
+        const t = tabs[i];
+        if(t.url) { recent.unshift({url:t.url, title:t.title, fav:t.fav}); if(recent.length>6)recent.pop(); renderRecent(); }
+        if(tabs.length===1){ tabs=[mkTab()]; cur=0; sync(); return; }
+        tabs.splice(i,1);
+        if(cur>=tabs.length)cur=tabs.length-1;
+        sync();
+      }
+
+      function renderRecent() {
+        const sec = document.getElementById('rc-sec'), list = document.getElementById('nt-rc');
+        if(!recent.length){ sec.classList.add('hidden'); return; }
+        sec.classList.remove('hidden');
+        list.innerHTML = recent.map(r=>`<div class="flex items-center gap-2.5 p-2.5 rounded-xl bg-white/[0.02] border border-border hover:bg-white/5 transition-fast cursor-pointer" onclick="B.navigate('${r.url.replace(/'/g, "\\'")}')"><span class="text-text-muted text-xs">${r.fav?`<img src="${r.fav}" class="w-3.5 h-3.5 rounded-sm">`:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/></svg>'}</span><span class="text-xs text-text-secondary truncate flex-1 font-mono">${r.url}</span><span class="text-[9px] text-text-muted font-mono">closed</span></div>`).join('');
+      }
+
+      function navigate(raw, pushHist=true) {
+        const url = resolveUrl(raw);
+        if(!url) return;
+        const t = ct();
+        if(pushHist){ t.hist = t.hist.slice(0, t.hidx+1); t.hist.push(url); t.hidx = t.hist.length-1; }
+        t.url=url; t.title=url; 
+        try { t.fav=`https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`; } catch(e){}
+        document.getElementById('url-input').value=url;
+        renderTabs(); hideError(); showFrame();
+        doLoad(url, pushHist);
+        hideOmni();
+      }
+
+      async function doLoad(url, updateHash) {
+        startProg(); hideError();
+        const frame = document.getElementById('proxy-frame');
+        if(currentProxy==='scramjet'){
+          if(typeof openInFrame==='function') openInFrame(url);
+        } else {
+          try {
+            if(typeof __uv$config !== 'undefined') frame.src = __uv$config.prefix + __uv$config.encodeUrl(url);
+          } catch(e){ console.warn(e); }
+        }
+        frame.onload = ()=>{ stopProg(); };
+      }
+
+      function back(){ const t=ct(); if(t.hidx>0){ t.hidx--; t.url=t.hist[t.hidx]; sync(); doLoad(t.url,false); } }
+      function fwd(){ const t=ct(); if(t.hidx<t.hist.length-1){ t.hidx++; t.url=t.hist[t.hidx]; sync(); doLoad(t.url,false); } }
+      function reload(){ if(ct().url) doLoad(ct().url,false); }
+      function home(){ ct().url=''; ct().title='New tab'; document.getElementById('url-input').value=''; renderTabs(); hideError(); showNew(); }
+
+      function showFrame(){ document.getElementById('proxy-frame').style.display='block'; document.getElementById('newtab').style.display='none'; }
+      function showNew(){ document.getElementById('proxy-frame').style.display='none'; document.getElementById('newtab').style.display='flex'; }
+      function hideError(){ document.getElementById('error-page').classList.add('hidden'); }
+      
+      function startProg(){ 
+        const b=document.getElementById('prog-bar'); 
+        b.style.transition = 'none'; b.style.width='15%'; 
+        requestAnimationFrame(() => {
+          b.classList.add('!opacity-100');
+          b.style.transition = 'width 1.5s ease-out';
+          b.style.width='80%';
+        });
+      }
+      function stopProg(){ 
+        const b=document.getElementById('prog-bar'); 
+        b.style.width='100%'; 
+        setTimeout(()=> { b.classList.remove('!opacity-100'); b.style.width='0'; }, 200);
+      }
+
+      function focusUrl(){ document.getElementById('url-input').select(); }
+      function onFocus(){}
+      function onBlur(){}
+      function onInput(val){}
+      function onKey(e){ 
+        if(e.key==='Enter'){ navigate(e.target.value); hideOmni(); } 
+      }
+      function hideOmni(){ document.getElementById('omni').classList.add('hidden'); }
+
+      function toggleProxyDropdown(e){
+        e.stopPropagation();
+        const d=document.getElementById('proxy-dropdown');
+        const rect = document.getElementById('badge-proxy').getBoundingClientRect();
+        d.style.top = (rect.bottom + 4) + 'px';
+        d.style.left = rect.left + 'px';
+        d.innerHTML=`<div class="px-3 py-1.5 text-[9px] font-mono text-text-muted uppercase tracking-wider">Proxy</div>
+          <div class="px-3 py-2 hover:bg-white/5 rounded-xl cursor-pointer text-xs flex items-center gap-2.5 transition-fast ${currentProxy==='scramjet'?'text-cyan':''}" onclick="B.setProxy('scramjet')"><span class="w-1.5 h-1.5 rounded-full bg-cyan"></span> Scramjet</div>
+          <div class="px-3 py-2 hover:bg-white/5 rounded-xl cursor-pointer text-xs flex items-center gap-2.5 transition-fast ${currentProxy==='ultraviolet'?'text-accent':''}" onclick="B.setProxy('ultraviolet')"><span class="w-1.5 h-1.5 rounded-full bg-accent"></span> Ultraviolet</div>`;
+        d.classList.remove('hidden');
+        setTimeout(() => document.addEventListener('click', () => d.classList.add('hidden'), { once: true }), 0);
+      }
+      function setProxy(p){ 
+        currentProxy=p; 
+        document.getElementById('proxy-name').textContent=p==='scramjet'?'SJ':'UV'; 
+        document.getElementById('proxy-dropdown').classList.add('hidden'); 
+        if(ct().url) doLoad(ct().url, false);
+      }
+      
+      function toggleSeDropdownNT(e){ 
+        e.stopPropagation(); 
+        const d=document.getElementById('se-dropdown'); 
+        d.innerHTML=`<div class="px-3 py-1.5 text-[9px] font-mono text-text-muted uppercase tracking-wider">Search</div>` + 
+          Object.entries(SEARCH_ENGINES).map(([k,v])=>`<div class="px-3 py-2 hover:bg-white/5 rounded-xl cursor-pointer text-xs flex items-center gap-3 transition-fast ${currentSearch===k?'text-accent':''}" onclick="B.setSearchEngine('${k}')"><span class="font-mono text-[10px]">${v.short}</span><span class="text-text-secondary">${v.name}</span></div>`).join(''); 
+        d.classList.toggle('hidden'); 
+      }
+      function toggleSeDropdownChrome(e){ 
+        e.stopPropagation(); 
+        const d=document.getElementById('se-dropdown-chrome');
+        const rect = document.getElementById('badge-se').getBoundingClientRect();
+        d.style.top = (rect.bottom + 4) + 'px';
+        d.style.left = rect.left + 'px';
+        d.innerHTML=`<div class="px-3 py-1.5 text-[9px] font-mono text-text-muted uppercase tracking-wider">Search</div>` + 
+          Object.entries(SEARCH_ENGINES).map(([k,v])=>`<div class="px-3 py-2 hover:bg-white/5 rounded-xl cursor-pointer text-xs flex items-center gap-3 transition-fast ${currentSearch===k?'text-accent':''}" onclick="B.setSearchEngine('${k}')"><span class="font-mono text-[10px]">${v.short}</span><span class="text-text-secondary">${v.name}</span></div>`).join(''); 
+        d.classList.remove('hidden');
+        setTimeout(() => document.addEventListener('click', () => d.classList.add('hidden'), { once: true }), 0);
+      }
+      function setSearchEngine(key){ 
+        currentSearch=key; 
+        localStorage.setItem('t9_search',key); 
+        document.getElementById('se-name-badge').textContent=SEARCH_ENGINES[key].short; 
+        document.getElementById('se-dropdown').classList.add('hidden'); 
+        document.getElementById('se-dropdown-chrome').classList.add('hidden'); 
+      }
+      
+      function star(){ 
+        const btn = document.getElementById('btn-star');
+        btn.classList.toggle('text-cyan');
+      }
+      function menu(e){
+        e.stopPropagation();
+        const old = document.getElementById('_ctxmenu');
+        if(old) { old.remove(); return; }
+        const m = document.createElement('div');
+        m.id = '_ctxmenu';
+        const rect = e.target.closest('button').getBoundingClientRect();
+        m.className = 'fixed z-[9999] glass-panel rounded-2xl p-1.5 min-w-[160px] shadow-xl border border-border';
+        m.style.top = (rect.bottom + 4) + 'px';
+        m.style.right = (window.innerWidth - rect.right) + 'px';
+        const items = [
+          ['New Tab', () => B.addTab()],
+          ['Reload', () => B.reload()],
+          ['Home', () => B.home()],
+          ['Wallpaper', () => openWallpaper()],
+        ];
+        items.forEach(([lbl, fn]) => {
+          const item = document.createElement('div');
+          item.className = 'px-3 py-2 hover:bg-white/5 rounded-xl cursor-pointer text-xs text-text-secondary hover:text-white transition-fast';
+          item.textContent = lbl;
+          item.onclick = () => { fn(); m.remove(); };
+          m.appendChild(item);
+        });
+        document.body.appendChild(m);
+        setTimeout(() => document.addEventListener('click', () => m.remove(), { once: true }), 0);
+      }
+      function retryLoad(){ if(ct().url) doLoad(ct().url,false); }
+      function switchAndRetry(){ 
+        currentProxy = currentProxy==='scramjet'?'ultraviolet':'scramjet'; 
+        setProxy(currentProxy); 
+        retryLoad(); 
+      }
+
+      renderTabs(); 
+      showNew();
+      document.getElementById('se-name-badge').textContent = SEARCH_ENGINES[currentSearch].short;
+      
+      return { 
+        addTab, navigate, back, fwd, reload, home, 
+        focusUrl, onFocus, onBlur, onInput, onKey, 
+        star, menu, setProxy, toggleProxyDropdown, 
+        setSearchEngine, toggleSeDropdownNT, toggleSeDropdownChrome, 
+        retryLoad, switchAndRetry, cur 
+      };
+    })();
+
+    const WP = {
+      clearBg(){ 
+        document.body.style.background=''; 
+        document.getElementById('video-background').style.display='none'; 
+      },
+    };
+    function openWallpaper(){ document.getElementById('wallpaper-overlay').classList.remove('hidden'); }
+    function closeWallpaper(){ document.getElementById('wallpaper-overlay').classList.add('hidden'); }
+
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+        e.preventDefault();
+        B.addTab();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+        e.preventDefault();
+        if (B.cur !== undefined) {
+          const closeEvent = new CustomEvent('closeTab', { detail: B.cur });
+          document.dispatchEvent(closeEvent);
+        }
+      }
+    });
+    
+    document.addEventListener('closeTab', (e) => {
+      if (typeof B.closeTab === 'function') {
+        // Access closeTab through the module pattern
+        const tabs = document.querySelectorAll('.tab');
+        if (tabs[e.detail]) {
+          tabs[e.detail].querySelector('.tab-x')?.click();
+        }
+      }
+    });
+  </script>
+</body>
+</html>

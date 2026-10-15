@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>T9 OS</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: #1e2127;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #abb2bf;
+    overflow: hidden;
+  }
+  #terminal {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 16px 8px 16px;
+    cursor: text;
+  }
+  #output::-webkit-scrollbar { width: 5px; }
+  #output::-webkit-scrollbar-track { background: #1e2127; }
+  #output::-webkit-scrollbar-thumb { background: #3e4451; border-radius: 3px; }
+  .line { white-space: pre-wrap; word-break: break-all; }
+  .input-row { display: flex; align-items: baseline; flex-wrap: wrap; margin-bottom: 2px; }
+  .prompt-user  { color: #98c379; }
+  .prompt-at    { color: #abb2bf; }
+  .prompt-host  { color: #61afef; }
+  .prompt-colon { color: #abb2bf; }
+  .prompt-path  { color: #c678dd; }
+  .prompt-sym   { color: #abb2bf; }
+  .cmd-text     { color: #e5c07b; }
+  #input-line   { display: flex; align-items: baseline; padding: 0 16px 12px 16px; }
+  #fake-input   { color: #e5c07b; white-space: pre; }
+  #cursor {
+    display: inline-block;
+    width: 0.55em;
+    height: 1.1em;
+    background: #528bff;
+    vertical-align: text-bottom;
+    animation: blink 1.1s step-end infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  #real-input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+  /* ansi colors */
+  .c-dir  { color: #61afef; font-weight: bold; }
+  .c-file { color: #abb2bf; }
+  .c-err  { color: #e06c75; }
+  .c-ok   { color: #98c379; }
+  .c-warn { color: #e5c07b; }
+  .c-dim  { color: #5c6370; }
+  .c-bold { color: #e5c07b; font-weight: bold; }
+  .c-cyan { color: #56b6c2; }
+  .c-mag  { color: #c678dd; }
+  .c-hi   { color: #e06c75; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="terminal">
+  <div id="output"></div>
+  <div id="input-line">
+    <span id="prompt-el"></span>
+    <span id="fake-input"></span><span id="cursor"></span>
+  </div>
+  <input id="real-input" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" autofocus/>
+</div>
+
+<script>
+// ================================================================
+//  T9 OS — Single File Terminal
+//  To add a command: add an entry to the COMMANDS object below.
+//  Format: commandName: { desc, usage, run(args) => string|string[] }
+// ================================================================
+
+// ── FILESYSTEM ──────────────────────────────────────────────────
+let FS = {
+  "/":                        { type: "dir" },
+  "/home":                    { type: "dir" },
+  "/home/user":               { type: "dir" },
+  "/home/user/documents":     { type: "dir" },
+  "/home/user/projects":      { type: "dir" },
+  "/home/user/readme.txt":    { type: "file", content: "Welcome to T9 OS!\nType 'help' to see all commands.\nEnjoy hacking around :)" },
+  "/home/user/hello.js":      { type: "file", content: 'console.log("Hello from T9 OS!");' },
+  "/etc":                     { type: "dir" },
+  "/etc/hostname":            { type: "file", content: "t9os" },
+  "/tmp":                     { type: "dir" },
+};
+
+// ── STATE ───────────────────────────────────────────────────────
+let CWD       = "/home/user";
+let ENV       = { USER: "user", HOME: "/home/user", SHELL: "/bin/bash", TERM: "xterm-256color" };
+let HIST      = [];
+let ALIASES   = { ll: "ls -la", la: "ls -a" };
+let START     = Date.now();
+let histIdx   = -1;
+let inputBuf  = "";
+
+// ── HELPERS ─────────────────────────────────────────────────────
+function resolvePath(cwd, input) {
+  if (!input || input === "~") return "/home/user";
+  if (input.startsWith("~/")) input = "/home/user/" + input.slice(2);
+  if (!input.startsWith("/")) input = (cwd === "/" ? "" : cwd) + "/" + input;
+  const parts = input.split("/").filter(Boolean);
+  const out = [];
+  for (const p of parts) { if (p === "..") out.pop(); else if (p !== ".") out.push(p); }
+  return "/" + out.join("/");
+}
+
+function children(dirPath) {
+  const prefix = dirPath === "/" ? "/" : dirPath + "/";
+  return Object.keys(FS).filter(k => k !== dirPath && k.startsWith(prefix) && !k.slice(prefix.length).includes("/"));
+}
+
+// ── COLOR HELPERS ────────────────────────────────────────────────
+const cc = {
+  dir:  s => `<span class="c-dir">${s}</span>`,
+  file: s => `<span class="c-file">${s}</span>`,
+  err:  s => `<span class="c-err">${s}</span>`,
+  ok:   s => `<span class="c-ok">${s}</span>`,
+  warn: s => `<span class="c-warn">${s}</span>`,
+  dim:  s => `<span class="c-dim">${s}</span>`,
+  bold: s => `<span class="c-bold">${s}</span>`,
+  cyan: s => `<span class="c-cyan">${s}</span>`,
+  mag:  s => `<span class="c-mag">${s}</span>`,
+  hi:   s => `<span class="c-hi">${s}</span>`,
+};
+
+// ================================================================
+//  COMMANDS — add new ones here!
+//  run(args) can return: string, string[], or null
+// ================================================================
+const COMMANDS = {
+
+  // ── NAVIGATION ────────────────────────────────────────────────
+  pwd: {
+    desc: "Print working directory", usage: "pwd",
+    run: () => CWD
+  },
+
+  cd: {
+    desc: "Change directory", usage: "cd [path]",
+    run: ([t]) => {
+      const dest = resolvePath(CWD, t || "~");
+      if (!FS[dest])              return cc.err(`cd: ${dest}: No such file or directory`);
+      if (FS[dest].type !== "dir") return cc.err(`cd: ${dest}: Not a directory`);
+      CWD = dest; return null;
+    }
+  },
+
+  ls: {
+    desc: "List directory contents", usage: "ls [-la] [path]",
+    run: (args) => {
+      const flags  = args.filter(a => a.startsWith("-")).join("");
+      const target = resolvePath(CWD, args.find(a => !a.startsWith("-")) || "");
+      if (!FS[target])              return cc.err(`ls: cannot access '${target}': No such file or directory`);
+      if (FS[target].type !== "dir") return cc.err(`ls: ${target}: Not a directory`);
+      const kids = children(target);
+      if (!kids.length) return cc.dim("(empty)");
+      if (flags.includes("l")) {
+        return kids.map(k => {
+          const name = k.split("/").pop();
+          const node = FS[k];
+          const t    = node.type === "dir" ? "d" : "-";
+          const perm = node.type === "dir" ? "rwxr-xr-x" : "rw-r--r--";
+          const size = node.type === "file" ? String(node.content.length).padStart(6) : "     -";
+          const lbl  = node.type === "dir" ? cc.dir(name) : cc.file(name);
+          return `${t}${perm}  1 user user ${size} Apr 21 00:00 ${lbl}`;
+        });
+      }
+      return [kids.map(k => { const name = k.split("/").pop(); return FS[k].type === "dir" ? cc.dir(name+"/") : cc.file(name); }).join("  ")];
+    }
+  },
+
+  // ── FILE OPERATIONS ───────────────────────────────────────────
+  cat: {
+    desc: "Print file contents", usage: "cat <file>",
+    run: ([f]) => {
+      if (!f) return cc.err("cat: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p])               return cc.err(`cat: ${f}: No such file or directory`);
+      if (FS[p].type === "dir") return cc.err(`cat: ${f}: Is a directory`);
+      return FS[p].content.split("\n");
+    }
+  },
+
+  echo: {
+    desc: "Print text", usage: "echo <text>",
+    run: args => args.join(" ")
+  },
+
+  touch: {
+    desc: "Create empty file", usage: "touch <file>",
+    run: ([f]) => {
+      if (!f) return cc.err("touch: missing operand");
+      FS[resolvePath(CWD, f)] = { type: "file", content: "" };
+      return cc.ok(`Created ${f}`);
+    }
+  },
+
+  mkdir: {
+    desc: "Create directory", usage: "mkdir <dir>",
+    run: ([d]) => {
+      if (!d) return cc.err("mkdir: missing operand");
+      const p = resolvePath(CWD, d);
+      if (FS[p]) return cc.err(`mkdir: ${d}: File exists`);
+      FS[p] = { type: "dir" };
+      return cc.ok(`Directory created: ${d}`);
+    }
+  },
+
+  rm: {
+    desc: "Remove file", usage: "rm <file>",
+    run: ([f]) => {
+      if (!f) return cc.err("rm: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p])               return cc.err(`rm: ${f}: No such file or directory`);
+      if (FS[p].type === "dir") return cc.err(`rm: ${f}: Is a directory (use rmdir)`);
+      delete FS[p]; return cc.ok(`Removed ${f}`);
+    }
+  },
+
+  rmdir: {
+    desc: "Remove empty directory", usage: "rmdir <dir>",
+    run: ([d]) => {
+      if (!d) return cc.err("rmdir: missing operand");
+      const p = resolvePath(CWD, d);
+      if (!FS[p])               return cc.err(`rmdir: ${d}: No such file or directory`);
+      if (FS[p].type !== "dir") return cc.err(`rmdir: ${d}: Not a directory`);
+      if (children(p).length)   return cc.err(`rmdir: ${d}: Directory not empty`);
+      delete FS[p]; return cc.ok(`Removed directory: ${d}`);
+    }
+  },
+
+  cp: {
+    desc: "Copy file", usage: "cp <src> <dest>",
+    run: ([src, dest]) => {
+      if (!src || !dest) return cc.err("cp: missing operand");
+      const sp = resolvePath(CWD, src), dp = resolvePath(CWD, dest);
+      if (!FS[sp])               return cc.err(`cp: ${src}: No such file or directory`);
+      if (FS[sp].type === "dir") return cc.err("cp: omitting directory");
+      FS[dp] = { ...FS[sp] };
+      return cc.ok(`Copied ${src} → ${dest}`);
+    }
+  },
+
+  mv: {
+    desc: "Move / rename file", usage: "mv <src> <dest>",
+    run: ([src, dest]) => {
+      if (!src || !dest) return cc.err("mv: missing operand");
+      const sp = resolvePath(CWD, src), dp = resolvePath(CWD, dest);
+      if (!FS[sp]) return cc.err(`mv: ${src}: No such file or directory`);
+      FS[dp] = FS[sp]; delete FS[sp];
+      return cc.ok(`Moved ${src} → ${dest}`);
+    }
+  },
+
+  write: {
+    desc: "Write text to a file (overwrites)", usage: "write <file> <content...>",
+    run: ([f, ...rest]) => {
+      if (!f) return cc.err("write: missing operand");
+      FS[resolvePath(CWD, f)] = { type: "file", content: rest.join(" ") };
+      return cc.ok(`Written to ${f}`);
+    }
+  },
+
+  append: {
+    desc: "Append text to a file", usage: "append <file> <content...>",
+    run: ([f, ...rest]) => {
+      if (!f) return cc.err("append: missing operand");
+      const p = resolvePath(CWD, f);
+      const existing = FS[p]?.type === "file" ? FS[p].content : "";
+      FS[p] = { type: "file", content: existing + "\n" + rest.join(" ") };
+      return cc.ok(`Appended to ${f}`);
+    }
+  },
+
+  head: {
+    desc: "Print first N lines of file", usage: "head [-n <num>] <file>",
+    run: (args) => {
+      const ni = args.indexOf("-n"), n = ni !== -1 ? parseInt(args[ni+1])||10 : 10;
+      const f  = args.find(a => !a.startsWith("-") && a !== String(n));
+      if (!f) return cc.err("head: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p]) return cc.err(`head: ${f}: No such file`);
+      return FS[p].content.split("\n").slice(0, n);
+    }
+  },
+
+  tail: {
+    desc: "Print last N lines of file", usage: "tail [-n <num>] <file>",
+    run: (args) => {
+      const ni = args.indexOf("-n"), n = ni !== -1 ? parseInt(args[ni+1])||10 : 10;
+      const f  = args.find(a => !a.startsWith("-") && a !== String(n));
+      if (!f) return cc.err("tail: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p]) return cc.err(`tail: ${f}: No such file`);
+      return FS[p].content.split("\n").slice(-n);
+    }
+  },
+
+  wc: {
+    desc: "Count lines / words / chars", usage: "wc <file>",
+    run: ([f]) => {
+      if (!f) return cc.err("wc: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p]) return cc.err(`wc: ${f}: No such file`);
+      const txt = FS[p].content;
+      return `  ${txt.split("\n").length} ${txt.split(/\s+/).filter(Boolean).length} ${txt.length} ${f}`;
+    }
+  },
+
+  grep: {
+    desc: "Search for pattern in file", usage: "grep <pattern> <file>",
+    run: ([pat, f]) => {
+      if (!pat || !f) return cc.err("grep: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p]) return cc.err(`grep: ${f}: No such file`);
+      const matched = FS[p].content.split("\n").filter(l => l.includes(pat));
+      if (!matched.length) return cc.dim("(no match)");
+      return matched.map(l => l.replace(new RegExp(pat.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"g"), m => cc.hi(m)));
+    }
+  },
+
+  find: {
+    desc: "Find files matching name", usage: "find [path] -name <pattern>",
+    run: (args) => {
+      const ni  = args.indexOf("-name"), pat = ni !== -1 ? args[ni+1] : null;
+      const start = args[0] && !args[0].startsWith("-") ? resolvePath(CWD, args[0]) : CWD;
+      const re  = pat ? new RegExp(pat.replace(/\*/g,".*")) : /.*/;
+      return Object.keys(FS).filter(k => k.startsWith(start) && re.test(k.split("/").pop())).map(k => cc.ok(k));
+    }
+  },
+
+  // ── JAVASCRIPT ────────────────────────────────────────────────
+  js: {
+    desc: "Execute a JavaScript expression or statement", usage: "js <code...>",
+    run: (args) => {
+      const code = args.join(" ");
+      const logs = [];
+      const fakeConsole = {
+        log:   (...a) => logs.push(a.map(String).join(" ")),
+        warn:  (...a) => logs.push(cc.warn("⚠ " + a.map(String).join(" "))),
+        error: (...a) => logs.push(cc.err("✖ " + a.map(String).join(" "))),
+        info:  (...a) => logs.push(cc.cyan("ℹ " + a.map(String).join(" "))),
+      };
+      try {
+        const result = new Function("console", `return (${code})`)(fakeConsole);
+        if (logs.length) return logs;
+        if (result !== undefined) return [cc.ok("← ") + String(result)];
+        return cc.dim("(undefined)");
+      } catch (_) {
+        try {
+          new Function("console", code)(fakeConsole);
+          return logs.length ? logs : cc.dim("(done)");
+        } catch (e) { return cc.err("SyntaxError: " + e.message); }
+      }
+    }
+  },
+
+  node: {
+    desc: "Run a .js file", usage: "node <file.js>",
+    run: ([f]) => {
+      if (!f) return cc.err("node: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p]) return cc.err(`node: ${f}: No such file`);
+      const logs = [];
+      const fakeConsole = {
+        log:   (...a) => logs.push(a.map(String).join(" ")),
+        warn:  (...a) => logs.push(cc.warn("⚠ " + a.map(String).join(" "))),
+        error: (...a) => logs.push(cc.err("✖ " + a.map(String).join(" "))),
+      };
+      try { new Function("console", FS[p].content)(fakeConsole); return logs.length ? logs : cc.dim("(no output)"); }
+      catch (e) { return cc.err(e.message); }
+    }
+  },
+
+  eval: {
+    desc: "Alias for js", usage: "eval <code...>",
+    run: (args) => COMMANDS.js.run(args)
+  },
+
+  // ── SYSTEM ────────────────────────────────────────────────────
+  whoami:   { desc: "Print current user",     usage: "whoami",    run: () => cc.ok("user") },
+  hostname: { desc: "Print hostname",          usage: "hostname",  run: () => FS["/etc/hostname"]?.content || "t9os" },
+
+  uname: {
+    desc: "Print system info", usage: "uname [-a]",
+    run: (args) => args.includes("-a") ? "T9 OS 1.0.0 Vanilla #1 SMP Tue Apr 21 2026 x86_64 GNU/JavaScript" : "T9 OS"
+  },
+
+  uptime: {
+    desc: "Show session uptime", usage: "uptime",
+    run: () => { const s = Math.floor((Date.now()-START)/1000); return `up ${Math.floor(s/60)}m ${s%60}s, 1 user, load average: 0.00, 0.00, 0.00`; }
+  },
+
+  date: { desc: "Print current date/time", usage: "date", run: () => new Date().toString() },
+
+  env: { desc: "Print environment variables", usage: "env",
+    run: () => Object.entries(ENV).map(([k,v]) => `${cc.cyan(k)}=${cc.ok(v)}`)
+  },
+
+  export: {
+    desc: "Set an environment variable", usage: "export KEY=value",
+    run: ([pair]) => {
+      if (!pair || !pair.includes("=")) return cc.err("export: invalid syntax. Use: export KEY=value");
+      const [k, ...rest] = pair.split("=");
+      ENV[k] = rest.join("=");
+      return cc.ok(`Exported ${k}`);
+    }
+  },
+
+  // ── TERMINAL ──────────────────────────────────────────────────
+  clear: {
+    desc: "Clear the terminal", usage: "clear",
+    run: () => { document.getElementById("output").innerHTML = ""; return null; }
+  },
+
+  reset: {
+    desc: "Reset terminal (alias for clear)", usage: "reset",
+    run: () => COMMANDS.clear.run()
+  },
+
+  history: {
+    desc: "Show command history", usage: "history",
+    run: () => HIST.map((cmd, i) => `${cc.dim(String(i+1).padStart(4))}  ${cmd}`)
+  },
+
+  alias: {
+    desc: "Set or list aliases", usage: "alias [name=cmd]",
+    run: ([pair]) => {
+      if (!pair) return Object.entries(ALIASES).map(([k,v]) => `alias ${cc.cyan(k)}='${cc.ok(v)}'`);
+      if (!pair.includes("=")) return cc.err("alias: invalid syntax. Use: alias name=command");
+      const [name, ...rest] = pair.split("=");
+      ALIASES[name] = rest.join("=").replace(/^['"]|['"]$/g,"");
+      return cc.ok(`Alias set: ${name} → ${ALIASES[name]}`);
+    }
+  },
+
+  // ── TEXT UTILS ────────────────────────────────────────────────
+  sort: {
+    desc: "Sort lines from file", usage: "sort <file>",
+    run: ([f]) => {
+      if (!f) return cc.err("sort: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p]) return cc.err(`sort: ${f}: No such file`);
+      return FS[p].content.split("\n").sort();
+    }
+  },
+
+  uniq: {
+    desc: "Remove duplicate adjacent lines", usage: "uniq <file>",
+    run: ([f]) => {
+      if (!f) return cc.err("uniq: missing operand");
+      const p = resolvePath(CWD, f);
+      if (!FS[p]) return cc.err(`uniq: ${f}: No such file`);
+      const lines = FS[p].content.split("\n");
+      return lines.filter((l,i) => i === 0 || l !== lines[i-1]);
+    }
+  },
+
+  tr: {
+    desc: "Translate characters", usage: "tr <from> <to> <text...>",
+    run: ([from, to, ...rest]) => {
+      if (!from || !to) return cc.err("tr: missing operand");
+      return [...rest.join(" ")].map(ch => { const i = from.indexOf(ch); return i !== -1 && i < to.length ? to[i] : ch; }).join("");
+    }
+  },
+
+  // ── PROCESS ───────────────────────────────────────────────────
+  ps: {
+    desc: "List running processes (mock)", usage: "ps",
+    run: () => [
+      `${cc.bold("PID")}  ${cc.bold("TTY")}     ${cc.bold("CMD")}`,
+      `  ${cc.cyan("1")}   pts/0  t9os`,
+      `  ${cc.cyan("2")}   pts/0  bash`,
+      `  ${cc.cyan("3")}   pts/0  node`,
+    ]
+  },
+
+  kill: {
+    desc: "Terminate a process (mock)", usage: "kill <pid>",
+    run: ([pid]) => pid ? cc.ok(`Process ${pid} terminated.`) : cc.err("kill: missing operand")
+  },
+
+  sleep: {
+    desc: "Pause for N seconds (cosmetic)", usage: "sleep <n>",
+    run: ([n]) => cc.dim(`Slept for ${n||1}s`)
+  },
+
+  // ── NETWORK ───────────────────────────────────────────────────
+  ping: {
+    desc: "Ping a host (mock)", usage: "ping <host>",
+    run: ([host]) => {
+      if (!host) return cc.err("ping: missing operand");
+      const ms = () => (Math.random()*20+1).toFixed(3);
+      return [
+        `PING ${host}: 56 data bytes`,
+        `64 bytes from ${host}: icmp_seq=0 ttl=64 time=${ms()} ms`,
+        `64 bytes from ${host}: icmp_seq=1 ttl=64 time=${ms()} ms`,
+        `64 bytes from ${host}: icmp_seq=2 ttl=64 time=${ms()} ms`,
+        `--- ${host} ping statistics ---`,
+        `3 packets transmitted, 3 received, 0% packet loss`,
+      ];
+    }
+  },
+
+  curl: {
+    desc: "Fetch a URL (mock)", usage: "curl <url>",
+    run: ([url]) => url ? cc.dim(`curl: browser sandbox active — try: js fetch("${url}").then(r=>r.text()).then(console.log)`) : cc.err("curl: missing URL")
+  },
+
+  ifconfig: {
+    desc: "Show network interfaces (mock)", usage: "ifconfig",
+    run: () => [
+      `${cc.bold("lo0")}:  inet 127.0.0.1   netmask 0xff000000`,
+      `${cc.bold("eth0")}: inet 10.0.2.15    netmask 0xffffff00  broadcast 10.0.2.255`,
+    ]
+  },
+
+  // ── FUN ───────────────────────────────────────────────────────
+  cowsay: {
+    desc: "A cow says something", usage: "cowsay <text...>",
+    run: (args) => {
+      const msg = args.join(" ") || "Moo!";
+      const b   = "-".repeat(msg.length + 2);
+      return [` ${b}`, `< ${msg} >`, ` ${b}`, "        \\   ^__^", "         \\  (oo)\\_______", "            (__)\\       )\\/\\", "                ||----w |", "                ||     ||"];
+    }
+  },
+
+  banner: {
+    desc: "Print large ASCII-style text", usage: "banner <text>",
+    run: (args) => {
+      const text = (args.join(" ") || "T9 OS").toUpperCase().slice(0,8);
+      return [`<span style="color:#61afef;font-size:0.8em;letter-spacing:3px;font-weight:bold">${text.split("").map(ch=>`[${ch}]`).join("")}</span>`];
+    }
+  },
+
+  matrix: {
+    desc: "Show matrix rain effect", usage: "matrix",
+    run: () => {
+      const ch = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*";
+      return Array.from({length:8}, () =>
+        Array.from({length:50}, () => ch[Math.floor(Math.random()*ch.length)])
+          .map(x => `<span style="color:hsl(${110+Math.random()*30},100%,${35+Math.random()*30}%)">${x}</span>`)
+          .join("")
+      );
+    }
+  },
+
+  fortune: {
+    desc: "Print a random fortune", usage: "fortune",
+    run: () => {
+      const f = [
+        "The best way to predict the future is to invent it. — Alan Kay",
+        "Talk is cheap. Show me the code. — Linus Torvalds",
+        "Programs must be written for people to read. — SICP",
+        "Any sufficiently advanced technology is indistinguishable from magic. — Arthur C. Clarke",
+        "There are only two hard things in CS: cache invalidation and naming things.",
+        "It works on my machine. — Every developer, ever",
+        "Code is like humor. When you have to explain it, it's bad. — Cory House",
+        "First, solve the problem. Then, write the code. — John Johnson",
+      ];
+      return cc.warn('"') + f[Math.floor(Math.random()*f.length)] + cc.warn('"');
+    }
+  },
+
+  // ── HELP ──────────────────────────────────────────────────────
+  help: {
+    desc: "Show available commands", usage: "help [command]",
+    run: ([cmd]) => {
+      if (cmd) {
+        const h = COMMANDS[cmd];
+        if (!h) return cc.err(`help: no such command: ${cmd}`);
+        return [cc.bold(cmd), `  ${cc.dim("Description:")} ${h.desc}`, `  ${cc.dim("Usage:")}       ${cc.cyan(h.usage)}`];
+      }
+      const groups = {
+        "Navigation":      ["pwd","cd","ls"],
+        "File Operations": ["cat","echo","touch","mkdir","rm","rmdir","cp","mv","write","append","head","tail","wc","grep","find"],
+        "JavaScript":      ["js","node","eval"],
+        "Text Utilities":  ["sort","uniq","tr"],
+        "System":          ["whoami","hostname","uname","uptime","date","env","export","ps","kill","sleep"],
+        "Network":         ["ping","curl","ifconfig"],
+        "Terminal":        ["clear","reset","history","alias"],
+        "Fun":             ["cowsay","banner","matrix","fortune"],
+      };
+      const lines = [
+        cc.bold("┌─── T9 OS Commands ───────────────────────────────────┐"),
+        cc.bold("│") + cc.dim(" Type 'help &lt;cmd&gt;' for detailed usage of any command ") + cc.bold("│"),
+        cc.bold("└──────────────────────────────────────────────────────┘"),
+        "",
+      ];
+      for (const [group, cmds] of Object.entries(groups)) {
+        lines.push(cc.warn("  ▸ " + group));
+        for (const name of cmds) { const h = COMMANDS[name]; if (h) lines.push(`    ${cc.cyan(name.padEnd(12))} ${cc.dim(h.desc)}`); }
+        lines.push("");
+      }
+      lines.push(cc.dim("  ↑↓ = history  |  Tab = autocomplete  |  Ctrl+C = cancel  |  Ctrl+L = clear"));
+      return lines;
+    }
+  },
+};
+
+// ── EXECUTE ─────────────────────────────────────────────────────
+function execute(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  const parts   = trimmed.split(/\s+/);
+  const aliased = ALIASES[parts[0]];
+  const resolved = aliased ? (aliased + " " + parts.slice(1).join(" ")).trim() : trimmed;
+  const [cmd, ...args] = resolved.split(/\s+/);
+  const handler = COMMANDS[cmd.toLowerCase()];
+  if (!handler) return [cc.err(`bash: ${cmd}: command not found`), cc.dim("Type 'help' to see available commands.")];
+  const result = handler.run(args);
+  if (result === null || result === undefined || result === "") return [];
+  if (Array.isArray(result)) return result.filter(r => r !== "");
+  return [result];
+}
+
+// ── RENDER ──────────────────────────────────────────────────────
+function promptHTML() {
+  const path = CWD.replace("/home/user", "~");
+  return `<span class="prompt-user">user</span><span class="prompt-at">@</span><span class="prompt-host">t9os</span><span class="prompt-colon">:</span><span class="prompt-path">${path}</span><span class="prompt-sym">$ </span>`;
+}
+
+function updatePrompt() {
+  document.getElementById("prompt-el").innerHTML = promptHTML();
+}
+
+function print(lines) {
+  const out = document.getElementById("output");
+  for (const line of lines) {
+    const div = document.createElement("div");
+    div.className = "line";
+    div.innerHTML = line;
+    out.appendChild(div);
+  }
+  out.scrollTop = out.scrollHeight;
+}
+
+function printEntry(inputText, lines) {
+  const out = document.getElementById("output");
+  // prompt + command row
+  const row = document.createElement("div");
+  row.className = "input-row";
+  row.innerHTML = promptHTML() + `<span class="cmd-text">${inputText.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</span>`;
+  out.appendChild(row);
+  // output lines
+  for (const line of lines) {
+    const div = document.createElement("div");
+    div.className = "line";
+    div.innerHTML = line;
+    out.appendChild(div);
+  }
+  out.scrollTop = out.scrollHeight;
+}
+
+// ── AUTOCOMPLETE ────────────────────────────────────────────────
+function tabComplete() {
+  const parts = inputBuf.split(/\s+/);
+  if (parts.length === 1) {
+    const prefix  = parts[0].toLowerCase();
+    const matches = Object.keys(COMMANDS).filter(k => k.startsWith(prefix));
+    if (matches.length === 1)     { inputBuf = matches[0] + " "; refreshInput(); }
+    else if (matches.length > 1)  { print([matches.map(m => cc.cyan(m)).join("  ")]); }
+  } else {
+    const partial = parts[parts.length - 1];
+    const dir     = partial.includes("/") ? resolvePath(CWD, partial.substring(0, partial.lastIndexOf("/")+1)) : CWD;
+    const prefix  = partial.includes("/") ? partial.split("/").pop() : partial;
+    const matches = children(dir).map(k => k.split("/").pop()).filter(n => n.startsWith(prefix));
+    if (matches.length === 1) {
+      const base = partial.substring(0, partial.length - prefix.length);
+      inputBuf   = parts.slice(0,-1).join(" ") + " " + base + matches[0];
+      refreshInput();
+    } else if (matches.length > 1) { print([matches.map(m => cc.cyan(m)).join("  ")]); }
+  }
+}
+
+function refreshInput() {
+  document.getElementById("fake-input").textContent = inputBuf;
+}
+
+// ── BOOT BANNER ─────────────────────────────────────────────────
+function boot() {
+  print([
+    `<span style="color:#61afef;font-weight:bold">████████╗ █████╗      ██████╗ ███████╗</span>`,
+    `<span style="color:#61afef;font-weight:bold">╚══██╔══╝██╔══██╗    ██╔═══██╗██╔════╝</span>`,
+    `<span style="color:#56b6c2;font-weight:bold">   ██║   ╚██████║    ██║   ██║███████╗</span>`,
+    `<span style="color:#56b6c2;font-weight:bold">   ██║    ╚═══██║    ██║   ██║╚════██║</span>`,
+    `<span style="color:#c678dd;font-weight:bold">   ██║    █████╔╝    ╚██████╔╝███████║</span>`,
+    `<span style="color:#c678dd;font-weight:bold">   ╚═╝    ╚════╝      ╚═════╝ ╚══════╝</span>`,
+    ``,
+    `<span class="c-ok">T9 OS — Linux-like shell with JS execution • Type </span><span class="c-bold">help</span><span class="c-ok"> to get started</span>`,
+    `<span class="c-dim">T9 OS v1.0.0 | Session started ${new Date().toLocaleString()}</span>`,
+    ``,
+  ]);
+  updatePrompt();
+}
+
+// ── INPUT HANDLING ───────────────────────────────────────────────
+const input = document.getElementById("real-input");
+
+document.getElementById("terminal").addEventListener("click", () => input.focus());
+
+input.addEventListener("input", () => {
+  inputBuf = input.value;
+  refreshInput();
+});
+
+input.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const cmd = inputBuf;
+    input.value = "";
+    inputBuf    = "";
+    histIdx     = -1;
+    refreshInput();
+    if (cmd.trim()) HIST.push(cmd.trim());
+    const lines = execute(cmd);
+    printEntry(cmd, lines);
+    updatePrompt();
+    return;
+  }
+
+  if (e.key === "Tab") {
+    e.preventDefault();
+    tabComplete();
+    return;
+  }
+
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!HIST.length) return;
+    histIdx  = Math.min(histIdx + 1, HIST.length - 1);
+    inputBuf = HIST[HIST.length - 1 - histIdx];
+    input.value = inputBuf;
+    refreshInput();
+    return;
+  }
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    histIdx  = Math.max(histIdx - 1, -1);
+    inputBuf = histIdx === -1 ? "" : HIST[HIST.length - 1 - histIdx];
+    input.value = inputBuf;
+    refreshInput();
+    return;
+  }
+
+  if (e.key === "l" && e.ctrlKey) {
+    e.preventDefault();
+    document.getElementById("output").innerHTML = "";
+    return;
+  }
+
+  if (e.key === "c" && e.ctrlKey) {
+    e.preventDefault();
+    printEntry(inputBuf, [cc.err("^C")]);
+    input.value = "";
+    inputBuf    = "";
+    histIdx     = -1;
+    refreshInput();
+    updatePrompt();
+    return;
+  }
+});
+
+// On backspace/delete fix sync
+input.addEventListener("keyup", () => {
+  inputBuf = input.value;
+  refreshInput();
+});
+
+boot();
+</script>
+</body>
+</html>

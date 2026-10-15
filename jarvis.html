@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Jarvis AI</title>
+</head>
+<body>
+  <h1>🧠 Jarvis</h1>
+
+  <button onclick="toggleJarvis()">🎤 Toggle Jarvis</button>
+  <p id="status">Idle...</p>
+
+<script>
+const WORKER_URL = "https://morning-voice-63fa.t9osta.workers.dev";
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+
+recognition.lang = "en-US";
+recognition.continuous = false;
+recognition.interimResults = false;
+recognition.maxAlternatives = 1;
+
+let isActive = false;
+let isProcessing = false;
+let retryTimer = null;
+
+function setStatus(t) {
+  document.getElementById("status").innerText = t;
+}
+
+function speak(text) {
+  const msg = new SpeechSynthesisUtterance(text);
+  msg.lang = "en-US";
+  msg.rate = 1;
+  speechSynthesis.speak(msg);
+}
+
+function safeStart() {
+  try {
+    recognition.start();
+  } catch (e) {
+    // prevents "already started" crash
+    setTimeout(() => {
+      try { recognition.start(); } catch {}
+    }, 300);
+  }
+}
+
+function toggleJarvis() {
+  isActive = !isActive;
+
+  if (isActive) {
+    setStatus("🎤 Listening...");
+    safeStart();
+  } else {
+    setStatus("Stopped.");
+    recognition.stop();
+  }
+}
+
+recognition.onstart = () => {
+  setStatus("🎤 Listening...");
+};
+
+recognition.onresult = async (event) => {
+  const text = event.results[0][0].transcript;
+
+  setStatus("You: " + text);
+  isProcessing = true;
+
+  recognition.stop();
+
+  try {
+    const res = await fetch(WORKER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    });
+
+    const data = await res.json();
+
+    setStatus("Jarvis: " + data.reply);
+    speak(data.reply);
+
+  } catch (err) {
+    setStatus("Worker error");
+  }
+
+  isProcessing = false;
+
+  if (isActive) {
+    setTimeout(() => safeStart(), 600);
+  }
+};
+
+recognition.onerror = (e) => {
+  console.log("Speech error:", e);
+
+  if (!isActive) return;
+
+  if (e.error === "no-speech") {
+    setStatus("Didn’t hear you — retrying...");
+  }
+
+  if (e.error === "network") {
+    setStatus("Network issue — retrying...");
+  }
+
+  clearTimeout(retryTimer);
+
+  retryTimer = setTimeout(() => {
+    if (isActive) safeStart();
+  }, 800);
+};
+
+recognition.onend = () => {
+  if (isActive && !isProcessing) {
+    retryTimer = setTimeout(() => safeStart(), 400);
+  }
+};
+</script>
+
+</body>
+</html>

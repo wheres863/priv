@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="./ghost.js"></script>
+    <!-- <script src="splash.guard.js"></script> -->
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="./index.config.js"></script>
+    <script src="./surf/baremux/index.js"></script>
+    <script src="./surf/scram/scramjet.all.js"></script>
+    <title>SPLASH</title>
+    <meta name="title" content="SPLASH" />
+    <meta name="description" content="a modern web proxy browser" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://splash.rhw.one/" />
+    <meta property="og:title" content="SPLASH" />
+    <meta property="og:description" content="a modern web proxy browser" />
+    <meta property="og:image" content="https://splash.rhw.one/card.png" />
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://splash.rhw.one/" />
+    <meta property="twitter:title" content="SPLASH" />
+    <meta property="twitter:description" content="a modern web proxy browser" />
+    <meta property="twitter:image" content="https://splash.rhw.one/card.png" />
+    <script>
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        location.replace(`https://${location.host}${location.pathname}${location.search}${location.hash}`);
+      }
+    </script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-WDHVNCL11H"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-WDHVNCL11H');
+    </script>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      :root {
+        --bg:      #0a0a0b;
+        --bg2:     #111114;
+        --bg3:     #18181c;
+        --bg4:     #202026;
+        --border:  rgba(255,255,255,0.07);
+        --border2: rgba(255,255,255,0.13);
+        --accent:  #5b8fff;
+        --accent2: #a78bfa;
+        --text:    #e8e8ee;
+        --text2:   #8888a0;
+        --text3:   #45455a;
+        --green:   #3ecf8e;
+        --red:     #ff5f6d;
+        --font:    'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      }
+
+      html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+      /* ── BROWSER SHELL ── */
+      #browser { display: flex; flex-direction: column; height: 100vh; }
+
+      /* ── CHROME ── */
+      #chrome { flex-shrink: 0; background: var(--bg2); border-bottom: 1px solid var(--border); }
+
+      /* ── TAB STRIP ── */
+      #tab-strip { display: flex; align-items: flex-end; padding: 8px 8px 0; gap: 2px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+      #tab-strip::-webkit-scrollbar { display: none; }
+
+      .tab {
+        display: flex; align-items: center; gap: 7px; padding: 0 10px; height: 34px;
+        border-radius: 8px 8px 0 0; border: 1px solid transparent; border-bottom: none;
+        font-size: 11px; color: var(--text2); min-width: 110px; max-width: 210px;
+        cursor: pointer; flex-shrink: 0; position: relative;
+        transition: background .12s, color .12s; font-family: var(--font); letter-spacing: .02em;
+      }
+      .tab:hover { background: var(--bg3); color: var(--text); }
+      .tab.active { background: var(--bg3); border-color: var(--border2); color: var(--text); }
+      .tab.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 1px; background: var(--bg3); }
+      .tab-fav  { font-size: 12px; flex-shrink: 0; width: 14px; text-align: center; }
+      .tab-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .tab-x {
+        opacity: 0; width: 16px; height: 16px; border-radius: 4px; display: flex; align-items: center;
+        justify-content: center; font-size: 10px; background: transparent; border: none;
+        color: var(--text2); cursor: pointer; flex-shrink: 0; transition: background .1s, opacity .1s; font-family: var(--font);
+      }
+      .tab:hover .tab-x, .tab.active .tab-x { opacity: 1; }
+      .tab-x:hover { background: rgba(255,95,109,.25); color: var(--red); }
+
+      #btn-newtab {
+        width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent;
+        color: var(--text3); font-size: 18px; cursor: pointer; display: flex; align-items: center;
+        justify-content: center; margin-bottom: 4px; transition: background .1s, color .1s;
+      }
+      #btn-newtab:hover { background: var(--bg4); color: var(--text); }
+
+      /* ── NAV BAR ── */
+      #nav-bar { display: flex; align-items: center; gap: 5px; padding: 6px 10px 8px; }
+
+      .nav-btn {
+        width: 30px; height: 30px; border-radius: 7px; border: none; background: transparent;
+        color: var(--text2); font-size: 15px; cursor: pointer; display: flex; align-items: center;
+        justify-content: center; transition: background .1s, color .1s; flex-shrink: 0; font-family: var(--font);
+      }
+      .nav-btn:hover { background: var(--bg4); color: var(--text); }
+      .nav-btn:disabled { opacity: .2; cursor: default; pointer-events: none; }
+
+      #url-bar {
+        flex: 1; display: flex; align-items: center; background: var(--bg);
+        border: 1px solid var(--border2); border-radius: 30px; height: 34px;
+        padding: 0 14px; gap: 8px; cursor: text; transition: border-color .2s, box-shadow .2s;
+      }
+      #url-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,143,255,.12); }
+      #url-scheme { font-size: 11px; color: var(--green); flex-shrink: 0; font-family: var(--font); letter-spacing: .04em; }
+      #url-input {
+        flex: 1; border: none; background: transparent; font-size: 12px; color: var(--text);
+        font-family: var(--font); outline: none; letter-spacing: .02em;
+      }
+      #url-input::placeholder { color: var(--text3); }
+      #url-go {
+        width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent;
+        color: var(--text3); font-size: 16px; cursor: pointer; flex-shrink: 0; display: flex;
+        align-items: center; justify-content: center; transition: color .1s; padding: 0; font-family: var(--font);
+      }
+      #url-go:hover { color: var(--accent); }
+
+      .side-btn {
+        width: 30px; height: 30px; border-radius: 7px; border: 1px solid transparent; background: transparent;
+        color: var(--text2); font-size: 13px; cursor: pointer; display: flex; align-items: center;
+        justify-content: center; transition: background .1s, color .1s, border-color .1s;
+      }
+      .side-btn:hover { background: var(--bg4); color: var(--text); border-color: var(--border2); }
+      .side-btn.starred { color: #f5c842; }
+
+      /* ── CONTENT ── */
+      #content { flex: 1; position: relative; overflow: hidden; background: var(--bg3); }
+      #proxy-frame { width: 100%; height: 100%; border: none; display: none; }
+
+      /* progress */
+      #prog { position: absolute; top: 0; left: 0; right: 0; height: 2px; pointer-events: none; z-index: 100; }
+      #prog-bar {
+        height: 100%; width: 0; opacity: 0;
+        background: linear-gradient(90deg, var(--accent), var(--accent2));
+        box-shadow: 0 0 8px var(--accent);
+        transition: width 1.8s cubic-bezier(.4,0,.2,1), opacity .3s;
+      }
+
+      /* ── NEW TAB ── */
+      #newtab {
+        position: absolute; inset: 0; overflow-y: auto;
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: flex-start; padding: 52px 24px 32px; gap: 30px;
+      }
+      #newtab::before {
+        content: ''; position: fixed; inset: 0; pointer-events: none;
+        background-image: radial-gradient(circle, rgba(255,255,255,.03) 1px, transparent 1px);
+        background-size: 28px 28px;
+      }
+      .ns { position: relative; z-index: 1; width: 100%; max-width: 600px; }
+
+      #nt-clock { font-size: clamp(30px,5vw,52px); color: var(--text3); letter-spacing: .08em; text-align: center; font-variant-numeric: tabular-nums; }
+      #nt-date  { font-size: 11px; color: var(--text3); letter-spacing: .2em; text-transform: uppercase; text-align: center; margin-top: 6px; }
+
+      #nt-logo { font-size: clamp(40px,7vw,66px); font-weight: 700; letter-spacing: -1px; color: var(--text); text-align: center; }
+      #nt-logo .a { color: var(--accent); }
+      #nt-tag  { font-size: 10px; color: var(--text3); letter-spacing: .25em; text-transform: uppercase; text-align: center; margin-top: 6px; }
+
+      #nt-sw {
+        display: flex; align-items: center; background: var(--bg2);
+        border: 1px solid var(--border2); border-radius: 40px; height: 46px; padding: 0 18px; gap: 12px;
+        transition: border-color .2s, box-shadow .2s;
+      }
+      #nt-sw:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(91,143,255,.12); }
+      #nt-s {
+        flex: 1; border: none; background: transparent; font-size: 13px; color: var(--text);
+        font-family: var(--font); outline: none; letter-spacing: .02em;
+      }
+      #nt-s::placeholder { color: var(--text3); }
+      #nt-go {
+        padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border2);
+        background: var(--bg4); color: var(--text2); font-size: 11px; font-family: var(--font);
+        cursor: pointer; letter-spacing: .06em; transition: background .15s, color .15s, border-color .15s;
+      }
+      #nt-go:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+      .nt-lbl { font-size: 10px; color: var(--text3); letter-spacing: .18em; text-transform: uppercase; margin-bottom: 12px; }
+      #nt-sc { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+      .sc {
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        padding: 14px 6px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg2);
+        cursor: pointer; transition: background .12s, border-color .12s, transform .12s;
+      }
+      .sc:hover { background: var(--bg4); border-color: var(--border2); transform: translateY(-2px); }
+      .sc-i { width: 40px; height: 40px; border-radius: 10px; background: var(--bg3); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 20px; }
+      .sc-n { font-size: 10px; color: var(--text2); letter-spacing: .04em; text-align: center; }
+
+      #nt-rc { display: flex; flex-direction: column; gap: 6px; }
+      .rc {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        border-radius: 8px; border: 1px solid var(--border); background: var(--bg2);
+        cursor: pointer; transition: background .1s, border-color .1s;
+      }
+      .rc:hover { background: var(--bg4); border-color: var(--border2); }
+      .rc-url { flex: 1; font-size: 11px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* omnibox */
+      #omni {
+        position: absolute; z-index: 9999; display: none;
+        background: var(--bg2); border: 1px solid var(--border2); border-radius: 12px;
+        padding: 6px; min-width: 420px; max-width: 560px;
+        box-shadow: 0 16px 48px rgba(0,0,0,.7); font-size: 12px;
+        top: 86px; left: 50%; transform: translateX(-50%);
+      }
+      .or {
+        display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+        border-radius: 7px; cursor: pointer; color: var(--text2); transition: background .1s, color .1s;
+      }
+      .or:hover, .or.sel { background: var(--bg4); color: var(--text); }
+      .ob { font-size: 9px; padding: 2px 6px; border-radius: 4px; background: var(--bg4); color: var(--text3); letter-spacing: .06em; flex-shrink: 0; }
+
+      ::-webkit-scrollbar { width: 5px; height: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+
+      /* keep app.js ghost elements invisible */
+      #proxy-loading, #proxy-watermark, #terminal-shell { display: none !important; }
+    </style>
+  </head>
+
+  <body class="mode-terminal">
+
+    <!-- ── APP.JS GHOST ELEMENTS (required by app.js DOM queries) ── -->
+    <div id="proxy-shell" style="display:none">
+      <div id="proxy-loading"></div>
+      <div id="proxy-watermark">
+        <pre class="watermark-logo" id="watermark-logo"></pre>
+        <div class="watermark-hint"></div>
+      </div>
+    </div>
+    <div id="terminal-shell" style="display:none">
+      <div id="term">
+        <div id="term-output">
+          <div id="term-status">
+            <span class="term-status-label">url:</span>
+            <span id="term-location"></span>
+          </div>
+          <form id="term-input-row">
+            <span id="term-prefix">root@splash:~$&nbsp;</span>
+            <input id="term-input" autocomplete="off" spellcheck="false" />
+            <span id="term-cursor" aria-hidden="true"></span>
+            <span id="term-cursor-measure" aria-hidden="true"></span>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BROWSER UI ── -->
+    <div id="browser">
+      <div id="chrome">
+        <div id="tab-strip">
+          <button id="btn-newtab" title="New tab" onclick="B.addTab()">+</button>
+        </div>
+        <div id="nav-bar">
+          <button class="nav-btn" id="btn-back"   title="Back"    onclick="B.back()">&#8592;</button>
+          <button class="nav-btn" id="btn-fwd"    title="Forward" onclick="B.fwd()">&#8594;</button>
+          <button class="nav-btn" id="btn-reload" title="Reload"  onclick="B.reload()">&#8635;</button>
+          <button class="nav-btn" id="btn-home"   title="Home"    onclick="B.home()">&#8962;</button>
+
+          <div id="url-bar" onclick="B.focusUrl()">
+            <span id="url-scheme"></span>
+            <input id="url-input" type="text" placeholder="search or enter a URL…"
+              autocomplete="off" spellcheck="false"
+              onfocus="B.onFocus()" onblur="B.onBlur()"
+              oninput="B.onInput(this.value)"
+              onkeydown="B.onKey(event)" />
+            <button id="url-go" onclick="B.navigate(document.getElementById('url-input').value)">&#10230;</button>
+          </div>
+
+          <button class="side-btn" id="btn-star" title="Bookmark" onclick="B.star()">&#9734;</button>
+          <button class="side-btn" title="Menu" onclick="B.menu(event)">&#8942;</button>
+        </div>
+      </div>
+
+      <div id="content">
+        <div id="prog"><div id="prog-bar"></div></div>
+
+        <!-- THE REAL PROXY FRAME — app.js uses this exact ID -->
+        <iframe id="proxy-frame" title="SPLASH Proxy"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-pointer-lock allow-modals"></iframe>
+
+        <div id="newtab">
+          <div class="ns" style="text-align:center">
+            <div id="nt-clock">--:--:--</div>
+            <div id="nt-date"></div>
+          </div>
+          <div class="ns" style="text-align:center">
+            <div id="nt-logo">SPL<span class="a">A</span>SH</div>
+            <div id="nt-tag">web proxy · browser edition</div>
+          </div>
+          <div class="ns">
+            <div id="nt-sw">
+              <span style="font-size:14px;color:var(--text3)">⌕</span>
+              <input id="nt-s" type="text" placeholder="search or enter a URL…" autocomplete="off" spellcheck="false"
+                onkeydown="if(event.key==='Enter')B.navigate(this.value)" />
+              <button id="nt-go" onclick="B.navigate(document.getElementById('nt-s').value)">GO →</button>
+            </div>
+          </div>
+          <div class="ns">
+            <div class="nt-lbl">Quick access</div>
+            <div id="nt-sc">
+              <div class="sc" onclick="B.navigate('https://google.com')">   <div class="sc-i">🔍</div><div class="sc-n">Google</div></div>
+              <div class="sc" onclick="B.navigate('https://youtube.com')">  <div class="sc-i">▶️</div><div class="sc-n">YouTube</div></div>
+              <div class="sc" onclick="B.navigate('https://reddit.com')">   <div class="sc-i">👾</div><div class="sc-n">Reddit</div></div>
+              <div class="sc" onclick="B.navigate('https://github.com')">   <div class="sc-i">🐙</div><div class="sc-n">GitHub</div></div>
+              <div class="sc" onclick="B.navigate('https://twitter.com')">  <div class="sc-i">🐦</div><div class="sc-n">Twitter</div></div>
+              <div class="sc" onclick="B.navigate('https://discord.com')">  <div class="sc-i">💬</div><div class="sc-n">Discord</div></div>
+              <div class="sc" onclick="B.navigate('https://twitch.tv')">    <div class="sc-i">📡</div><div class="sc-n">Twitch</div></div>
+              <div class="sc" onclick="B.navigate('https://wikipedia.org')"><div class="sc-i">📖</div><div class="sc-n">Wikipedia</div></div>
+            </div>
+          </div>
+          <div class="ns" id="rc-sec" style="display:none">
+            <div class="nt-lbl">Recently closed</div>
+            <div id="nt-rc"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="omni"></div>
+
+    <script>
+      /* ── BROWSER CONTROLLER ────────────────────────────────────────
+         All navigation goes through openInFrame() from app.js.
+         app.js is loaded deferred AFTER this block, so we queue calls
+         that need scramjet until it signals ready via init().
+      ────────────────────────────────────────────────────────────── */
+
+      const B = (() => {
+        let tabs   = [mkTab()];
+        let cur    = 0;
+        let recent = [];
+        let omniIdx = -1;
+        let _progTimer;
+
+        function mkTab(url, title) {
+          return { url: url||'', title: title||'New tab', fav: '✦', hist: url?[url]:[], hidx: url?0:-1 };
+        }
+        function ct() { return tabs[cur]; }
+
+        /* ── CLOCK ── */
+        function tick() {
+          const n = new Date();
+          const cl = document.getElementById('nt-clock');
+          const dl = document.getElementById('nt-date');
+          if (cl) cl.textContent = n.toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+          if (dl) dl.textContent = n.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+        }
+        setInterval(tick, 1000); tick();
+
+        /* ── TABS ── */
+        function renderTabs() {
+          const strip = document.getElementById('tab-strip');
+          const add   = document.getElementById('btn-newtab');
+          strip.querySelectorAll('.tab').forEach(el => el.remove());
+          tabs.forEach((t, i) => {
+            const d = document.createElement('div');
+            d.className = 'tab' + (i === cur ? ' active' : '');
+            d.innerHTML = `<span class="tab-fav">${t.fav}</span><span class="tab-title">${esc(t.title)}</span><button class="tab-x">✕</button>`;
+            d.onclick = () => { if (cur !== i) { cur = i; sync(); } };
+            d.querySelector('.tab-x').onclick = e => { e.stopPropagation(); closeTab(i); };
+            strip.insertBefore(d, add);
+          });
+          document.getElementById('btn-back').disabled  = ct().hidx <= 0;
+          document.getElementById('btn-fwd').disabled   = ct().hidx >= ct().hist.length - 1;
+        }
+
+        function sync() {
+          const t = ct();
+          document.getElementById('url-input').value = t.url;
+          setScheme(t.url);
+          renderTabs();
+          if (t.url) { showFrame(); doLoad(t.url, false); }
+          else       { showNew(); }
+        }
+
+        function addTab(url, title) {
+          tabs.push(mkTab(url, title)); cur = tabs.length - 1; sync();
+          if (!url) setTimeout(() => document.getElementById('nt-s').focus(), 50);
+        }
+
+        function closeTab(i) {
+          const t = tabs[i];
+          if (t.url) { recent.unshift({ url: t.url, title: t.title }); if (recent.length > 6) recent.pop(); renderRecent(); }
+          if (tabs.length === 1) { tabs = [mkTab()]; cur = 0; sync(); return; }
+          tabs.splice(i, 1);
+          if (cur >= tabs.length) cur = tabs.length - 1;
+          sync();
+        }
+
+        function renderRecent() {
+          const sec  = document.getElementById('rc-sec');
+          const list = document.getElementById('nt-rc');
+          if (!recent.length) { sec.style.display = 'none'; return; }
+          sec.style.display = '';
+          list.innerHTML = recent.map(r =>
+            `<div class="rc" onclick="B.navigate('${esc(r.url)}')">
+               <span style="font-size:14px">🌐</span>
+               <span class="rc-url">${esc(r.url)}</span>
+               <span style="font-size:10px;color:var(--text3);flex-shrink:0">recently</span>
+             </div>`
+          ).join('');
+        }
+
+        /* ── NAVIGATE ──
+           The real proxy path:
+             1. normalizeUrl(raw)        — from app.js: handles search vs URL
+             2. openInFrame(url)         — from app.js: scramjet.encodeUrl → frame.src
+             3. setHashFromUrl(url)      — from app.js: updates window.location.hash
+        ── */
+        function navigate(raw, pushHist = true) {
+          const url = (typeof normalizeUrl === 'function')
+            ? normalizeUrl(raw)
+            : fallback(raw);
+          if (!url) return;
+
+          const t = ct();
+          if (pushHist) {
+            t.hist = t.hist.slice(0, t.hidx + 1);
+            t.hist.push(url);
+            t.hidx = t.hist.length - 1;
+          }
+          t.url   = url;
+          t.title = url; t.fav = '🌐';
+          try { const u = new URL(url); t.title = u.hostname; } catch {}
+
+          document.getElementById('url-input').value = url;
+          setScheme(url);
+          renderTabs();
+          showFrame();
+          doLoad(url, pushHist);
+          hideOmni();
+        }
+
+        function doLoad(url, updateHash) {
+          startProg();
+          // openInFrame and setHashFromUrl are globals defined in app.js
+          if (typeof openInFrame === 'function') {
+            openInFrame(url);
+            if (updateHash && typeof setHashFromUrl === 'function') setHashFromUrl(url);
+          } else {
+            // app.js not ready yet — wait for it
+            const iv = setInterval(() => {
+              if (typeof openInFrame === 'function') {
+                clearInterval(iv);
+                openInFrame(url);
+                if (updateHash && typeof setHashFromUrl === 'function') setHashFromUrl(url);
+              }
+            }, 100);
+          }
+          const frame = document.getElementById('proxy-frame');
+          frame.onload = () => { stopProg(); tryUpdateTitle(); };
+        }
+
+        function tryUpdateTitle() {
+          try {
+            const title = document.getElementById('proxy-frame').contentDocument?.title;
+            if (title) { ct().title = title; renderTabs(); }
+          } catch {}
+        }
+
+        function fallback(raw) {
+          raw = (raw || '').trim(); if (!raw) return null;
+          if (/^https?:\/\//i.test(raw)) return raw;
+          if (raw.includes('.') && !raw.includes(' ')) return 'https://' + raw;
+          return 'https://www.google.com/search?q=' + encodeURIComponent(raw);
+        }
+
+        function back() {
+          const t = ct(); if (t.hidx > 0) { t.hidx--; doLoad(t.hist[t.hidx], false); }
+        }
+        function fwd() {
+          const t = ct(); if (t.hidx < t.hist.length-1) { t.hidx++; doLoad(t.hist[t.hidx], false); }
+        }
+        function reload() {
+          if (ct().url) { startProg(); doLoad(ct().url, false); }
+        }
+        function home() {
+          // call app.js goHome to reset proxy state, then show our new-tab page
+          if (typeof goHome === 'function') goHome();
+          ct().url = ''; ct().title = 'New tab'; ct().fav = '✦';
+          document.getElementById('url-input').value = '';
+          setScheme('');
+          renderTabs();
+          showNew();
+          setTimeout(() => document.getElementById('nt-s').focus(), 50);
+        }
+
+        /* ── FRAME / NEWTAB SWITCH ── */
+        function showFrame() {
+          document.getElementById('proxy-frame').style.display = 'block';
+          document.getElementById('newtab').style.display      = 'none';
+          // tell app.js we're in proxy mode
+          document.body.classList.remove('mode-terminal');
+          document.body.classList.add('mode-proxy');
+        }
+        function showNew() {
+          document.getElementById('proxy-frame').style.display = 'none';
+          document.getElementById('newtab').style.display      = 'flex';
+          document.body.classList.remove('mode-proxy');
+          document.body.classList.add('mode-terminal');
+        }
+
+        /* ── URL BAR ── */
+        function focusUrl() { document.getElementById('url-input').select(); }
+        function setScheme(url) {
+          const el = document.getElementById('url-scheme');
+          if (!url) { el.textContent = ''; return; }
+          try {
+            const u = new URL(url);
+            el.textContent = u.protocol + '//';
+            el.style.color = u.protocol === 'https:' ? 'var(--green)' : 'var(--red)';
+          } catch { el.textContent = ''; }
+        }
+        function onFocus() { setTimeout(() => document.getElementById('url-input').select(), 0); }
+        function onBlur()  { hideOmni(); }
+        function onInput(val) { setScheme(val); buildOmni(val); }
+        function onKey(e) {
+          const rows = document.querySelectorAll('.or');
+          if (e.key === 'ArrowDown')  { e.preventDefault(); omniIdx = Math.min(omniIdx+1, rows.length-1); hilite(); }
+          else if (e.key === 'ArrowUp')   { e.preventDefault(); omniIdx = Math.max(omniIdx-1, 0); hilite(); }
+          else if (e.key === 'Enter') {
+            if (omniIdx >= 0 && rows[omniIdx]) rows[omniIdx].click();
+            else navigate(e.target.value);
+            hideOmni();
+          } else if (e.key === 'Escape') { hideOmni(); e.target.blur(); }
+        }
+
+        /* ── OMNIBOX ── */
+        const QUICK = [
+          {icon:'🔍',q:'google.com'},{icon:'▶️',q:'youtube.com'},{icon:'👾',q:'reddit.com'},
+          {icon:'🐙',q:'github.com'},{icon:'🐦',q:'twitter.com'},{icon:'💬',q:'discord.com'},
+          {icon:'📡',q:'twitch.tv'}, {icon:'📖',q:'wikipedia.org'},
+        ];
+        function buildOmni(val) {
+          const d = document.getElementById('omni');
+          if (!val) { hideOmni(); return; }
+          omniIdx = -1;
+          const isUrl = /^https?:\/\/|\./.test(val);
+          let html = isUrl
+            ? `<div class="or" onclick="B.navigate('${esc(val)}')"><span>🔗</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(val)}</span><span class="ob">go</span></div>`
+            : `<div class="or" onclick="B.navigate(${JSON.stringify(val)})"><span>🔍</span><span style="flex:1">${esc(val)}</span><span class="ob">search</span></div>`;
+          QUICK.filter(q => q.q.includes(val.toLowerCase())).forEach(q => {
+            html += `<div class="or" onclick="B.navigate('https://${esc(q.q)}')"><span>${q.icon}</span><span style="flex:1">${esc(q.q)}</span><span class="ob">site</span></div>`;
+          });
+          d.innerHTML = html; d.style.display = 'block';
+        }
+        function hilite() { document.querySelectorAll('.or').forEach((el,i) => el.classList.toggle('sel', i === omniIdx)); }
+        function hideOmni() { setTimeout(() => { document.getElementById('omni').style.display = 'none'; }, 150); }
+
+        /* ── PROGRESS ── */
+        function startProg() {
+          const b = document.getElementById('prog-bar');
+          clearTimeout(_progTimer);
+          b.style.transition = 'none'; b.style.width = '0'; b.style.opacity = '1';
+          requestAnimationFrame(() => { b.style.transition = 'width 2s cubic-bezier(.4,0,.2,1)'; b.style.width = '75%'; });
+        }
+        function stopProg() {
+          const b = document.getElementById('prog-bar');
+          b.style.width = '100%';
+          _progTimer = setTimeout(() => { b.style.opacity = '0'; setTimeout(() => b.style.width = '0', 300); }, 400);
+        }
+
+        /* ── STAR ── */
+        function star() {
+          const btn = document.getElementById('btn-star');
+          btn.classList.toggle('starred');
+          btn.textContent = btn.classList.contains('starred') ? '★' : '☆';
+        }
+
+        /* ── MENU ── */
+        function menu(e) {
+          const old = document.getElementById('_smenu');
+          if (old) { old.remove(); return; }
+          const items = [
+            ['New tab',        () => addTab()],
+            ['Reload',         () => reload()],
+            ['Home',           () => home()],
+            ['Dev tools',      () => { if (typeof handleDev === 'function') handleDev(); }],
+            ['Toggle adblock', () => {
+              if (typeof adblockEnabled !== 'undefined' && typeof setAdblockEnabled === 'function') {
+                setAdblockEnabled(!adblockEnabled);
+              }
+            }],
+          ];
+          const m = document.createElement('div');
+          m.id = '_smenu';
+          const nb = document.getElementById('nav-bar').getBoundingClientRect();
+          m.style.cssText = `position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border2);
+            border-radius:10px;padding:6px;min-width:156px;font-size:12px;font-family:var(--font);
+            box-shadow:0 16px 48px rgba(0,0,0,.7);right:10px;top:${nb.bottom+4}px`;
+          items.forEach(([lbl, fn]) => {
+            const r = document.createElement('div');
+            r.textContent = lbl;
+            r.style.cssText = 'padding:7px 12px;border-radius:6px;cursor:pointer;color:var(--text2)';
+            r.onmouseenter = () => { r.style.background='var(--bg4)'; r.style.color='var(--text)'; };
+            r.onmouseleave = () => { r.style.background=''; r.style.color='var(--text2)'; };
+            r.onclick = () => { fn(); m.remove(); };
+            m.appendChild(r);
+          });
+          document.body.appendChild(m);
+          setTimeout(() => document.addEventListener('click', () => m.remove(), { once: true }), 0);
+          e.stopPropagation();
+        }
+
+        /* ── HOTKEYS ── */
+        document.addEventListener('keydown', e => {
+          if (e.ctrlKey || e.metaKey) {
+            if (e.key === 't') { e.preventDefault(); addTab(); }
+            if (e.key === 'w') { e.preventDefault(); closeTab(cur); }
+            if (e.key === 'l') { e.preventDefault(); focusUrl(); }
+            if (e.key === 'r') { e.preventDefault(); reload(); }
+            if (e.key === 'Tab') { e.preventDefault(); cur = (cur+1) % tabs.length; sync(); }
+          }
+          // ctrl+` is still handled by app.js for overlay toggle
+        });
+
+        /* ── SYNC FROM APP.JS HASH CHANGES ──
+           app.js writes window.location.hash via setHashFromUrl / updateLocationLabel.
+           We watch for changes to keep our URL bar in sync.
+        ── */
+        window.addEventListener('hashchange', () => {
+          const token = window.location.hash.replace(/^#/, '');
+          if (!token) return;
+          try {
+            if (typeof decodeTarget === 'function') {
+              const url = decodeTarget(token);
+              if (url && url !== ct().url) {
+                ct().url = url; ct().fav = '🌐';
+                try { ct().title = new URL(url).hostname; } catch {}
+                document.getElementById('url-input').value = url;
+                setScheme(url);
+                renderTabs();
+                showFrame();
+              }
+            }
+          } catch {}
+        });
+
+        /* ── KEEP URL BAR IN SYNC WITH APP.JS POLLING ──
+           app.js calls setLocationLabel() every 500ms with the real decoded URL.
+           We wrap it so our URL bar also updates.
+        ── */
+        window._browserSyncUrl = function(url) {
+          if (!url || url === ct().url) return;
+          ct().url = url; ct().fav = '🌐';
+          try { ct().title = new URL(url).hostname; } catch {}
+          document.getElementById('url-input').value = url;
+          setScheme(url);
+          renderTabs();
+        };
+
+        /* ── INIT ── */
+        renderTabs();
+        showNew();
+
+        return { addTab, navigate, back, fwd, reload, home, focusUrl, onFocus, onBlur, onInput, onKey, star, menu };
+      })();
+
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    </script>
+
+    <!-- app.js deferred — runs after DOM + our script.
+         It sets up BareMux, ScramJet, registers SW, reads hash, calls openInFrame.
+         We patch setLocationLabel AFTER app.js defines it via a MutationObserver trick. -->
+    <script src="./app.js" defer></script>
+
+    <script>
+      /* Patch app.js's setLocationLabel once app.js has loaded (after defer).
+         app.js defines it as a regular function in global scope so we can wrap it. */
+      window.addEventListener('load', () => {
+        const orig = window.setLocationLabel;
+        if (typeof orig === 'function') {
+          window.setLocationLabel = function(val) {
+            orig(val);
+            if (typeof window._browserSyncUrl === 'function') window._browserSyncUrl(val);
+          };
+        }
+
+        // Also handle if app.js loaded a hash URL on init —
+        // it will have called openInFrame which shows the frame; we need to show it.
+        const hash = window.location.hash.replace(/^#/, '');
+        if (hash && typeof decodeTarget === 'function') {
+          try {
+            const url = decodeTarget(hash);
+            if (url) {
+              window._browserSyncUrl(url);
+              document.getElementById('proxy-frame').style.display = 'block';
+              document.getElementById('newtab').style.display      = 'none';
+            }
+          } catch {}
+        }
+      });
+    </script>
+  </body>
+</html>

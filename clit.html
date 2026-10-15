@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>T9 LITE Chat</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: #1a1a2e;
+      color: white;
+      font-family: 'General Sans', 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 90vh;
+      padding: 20px;
+    }
+
+    .main-container {
+      width: 100%;
+      height: 80vh;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: #202036;
+      border-radius: 1rem;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    h1 {
+      position: absolute;
+      top: 47%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #3b9eff;
+      font-size: 72px;
+      font-weight: 700;
+      letter-spacing: -2px;
+      font-family: 'Inter', sans-serif;
+      text-shadow: 0 0 20px rgba(59, 158, 255, 0.35);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.15;
+    }
+
+    .chat-wrapper {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 16px;
+      gap: 12px;
+    }
+
+    .status-bar {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.4);
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .status-bar.connected { color: #23a55a; }
+    .status-bar.disconnected { color: #f04747; }
+
+    #chat {
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 1rem;
+      padding: 16px;
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .message {
+      background: #202036;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 1rem;
+      padding: 10px 14px;
+      margin-bottom: 6px;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message b {
+      color: #3b9eff;
+      margin-right: 8px;
+    }
+
+    .message small {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    input {
+      padding: 12px 16px;
+      border-radius: 0.75rem;
+      background: #1a1a2e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: white;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+      font-family: inherit;
+    }
+
+    input:focus { border-color: #3b9eff; }
+    input::placeholder { color: rgba(255, 255, 255, 0.3); }
+
+    #user { width: 140px; flex-shrink: 0; }
+    #msg  { flex: 1; min-width: 0; }
+
+    button {
+      padding: 12px 20px;
+      border-radius: 0.75rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: #3b9eff;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      flex-shrink: 0;
+      font-family: inherit;
+    }
+
+    button:hover   { background: #2b8eef; border-color: rgba(255,255,255,0.2); }
+    button:active  { transform: scale(0.97); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .empty-state {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.3);
+      padding: 40px;
+    }
+
+    #chat::-webkit-scrollbar { width: 6px; }
+    #chat::-webkit-scrollbar-track { background: transparent; }
+    #chat::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    #chat::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+    @media (max-width: 600px) {
+      body { padding: 10px; }
+      .main-container { height: 98vh; }
+      h1 { font-size: 42px; }
+      .input-area { flex-wrap: wrap; }
+      #user { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="main-container">
+  <h1>T9 LITE</h1>
+  <div class="chat-wrapper">
+    <div class="status-bar" id="status">Connecting...</div>
+    <div id="chat">
+      <div class="empty-state">Loading messages...</div>
+    </div>
+    <div class="input-area">
+      <input id="user" placeholder="Username" maxlength="30">
+      <input id="msg"  placeholder="Type a message..." maxlength="500">
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = "https://aowskyprgoqoahphhuqm.supabase.co"
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvd3NreXByZ29xb2FocGhodXFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1MTY5NzAsImV4cCI6MjA5NTA5Mjk3MH0.kKunucpnKS_DcvSKrW6t5-5G2UN3H_ii3JbgtrG0Ars"
+
+  const client    = supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  const chatDiv   = document.getElementById('chat')
+  const msgInput  = document.getElementById('msg')
+  const userInput = document.getElementById('user')
+  const sendBtn   = document.getElementById('sendBtn')
+  const statusBar = document.getElementById('status')
+
+  // Persist username
+  userInput.value = localStorage.getItem('t9_username') || ''
+  userInput.addEventListener('change', () => localStorage.setItem('t9_username', userInput.value))
+
+  // Duplicate guard
+  const seen = new Set()
+
+  // ---- Render helpers ----
+  function escapeHtml(str) {
+    const d = document.createElement('div')
+    d.textContent = str
+    return d.innerHTML
+  }
+
+  function addMessage(m) {
+    if (seen.has(m.id)) return
+    seen.add(m.id)
+
+    const empty = chatDiv.querySelector('.empty-state')
+    if (empty) empty.remove()
+
+    const time = m.created_at
+      ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : 'now'
+
+    const div = document.createElement('div')
+    div.className = 'message'
+    div.innerHTML = `<b>${escapeHtml(m.username || 'Anonymous')}</b>${escapeHtml(m.message || '')}<small>${time}</small>`
+    chatDiv.appendChild(div)
+    chatDiv.scrollTop = chatDiv.scrollHeight
+  }
+
+  // ---- Load history ----
+  async function loadMessages() {
+    const { data, error } = await client
+      .from('messages')
+      .select('*')
+      .order('id', { ascending: true })
+      .limit(100)
+
+    if (error) {
+      chatDiv.innerHTML = `<div class="empty-state">Error: ${error.message}</div>`
+      return
+    }
+
+    if (!data || data.length === 0) {
+      chatDiv.innerHTML = `<div class="empty-state">No messages yet. Be the first to chat! 🎉</div>`
+      return
+    }
+
+    chatDiv.innerHTML = ''
+    data.forEach(addMessage)
+
+    // Seed polling timestamp from last loaded message
+    lastSeenTimestamp = data[data.length - 1].created_at
+  }
+
+  // ---- Send ----
+  async function sendMessage() {
+    const username = userInput.value.trim()
+    const message  = msgInput.value.trim()
+    if (!username) { alert('Please enter a username'); return }
+    if (!message)  return
+
+    localStorage.setItem('t9_username', username)
+    sendBtn.disabled = true
+    sendBtn.textContent = 'Sending...'
+    msgInput.value = ''
+    msgInput.focus()
+
+    const { error } = await client.from('messages').insert([{ username, message }])
+    if (error) console.error('Send error:', error)
+
+    sendBtn.disabled = false
+    sendBtn.textContent = 'Send'
+  }
+
+  // ---- Realtime ----
+  let channel
+
+  function subscribe() {
+    channel = client
+      .channel('chat-room')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        addMessage(payload.new)
+      })
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          statusBar.textContent = '● Connected (Live)'
+          statusBar.className = 'status-bar connected'
+        } else if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) {
+          statusBar.textContent = '● Reconnecting...'
+          statusBar.className = 'status-bar disconnected'
+          setTimeout(() => { try { client.removeChannel(channel) } catch(e){} subscribe() }, 3000)
+        }
+      })
+  }
+
+  subscribe()
+
+  // ---- Polling fallback (every 3s) ----
+  let lastSeenTimestamp = new Date().toISOString()
+
+  setInterval(async () => {
+    const { data, error } = await client
+      .from('messages')
+      .select('*')
+      .gt('created_at', lastSeenTimestamp)
+      .order('created_at', { ascending: true })
+      .limit(50)
+
+    if (!error && data && data.length > 0) {
+      data.forEach(addMessage)
+      lastSeenTimestamp = data[data.length - 1].created_at
+    }
+  }, 3000)
+
+  // ---- Events ----
+  sendBtn.addEventListener('click', sendMessage)
+  msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage() })
+
+  // ---- Init ----
+  loadMessages()
+</script>
+</body>
+</html>
